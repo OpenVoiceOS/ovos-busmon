@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  ovos-busmon:
+    build: .
+    container_name: ovos-busmon
+    image: jarbasai/ovos-busmon:latest
+    ports:
+      - "8005:8005"
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
