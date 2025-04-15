@@ -1,6 +1,6 @@
 # OVOS Messagebus Monitor
 
-A powerful web-based message bus monitor for [OpenVoiceOS (OVOS)](https://openvoiceos.com), built using FastAPI and
+A powerful web-based message bus monitor for [OpenVoiceOS (OVOS)](https://openvoiceos.org), built using FastAPI and
 WebSockets. Designed as an essential tool for core developers, HiveMind integrators, and voice assistant tinkerers.
 
 ![screenrecording](demo.gif)
