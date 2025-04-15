@@ -3,6 +3,8 @@
 A powerful web-based message bus monitor for [OpenVoiceOS (OVOS)](https://openvoiceos.com), built using FastAPI and
 WebSockets. Designed as an essential tool for core developers, HiveMind integrators, and voice assistant tinkerers.
 
+![screenrecording](demo.gif)
+
 > ⚠️ **Private Repository:** This project is currently in early access for **HiveMindInsiders only**. Do not share
 > externally.
 
