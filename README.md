@@ -5,8 +5,6 @@ WebSockets. Designed as an essential tool for core developers, HiveMind integrat
 
 ![screenrecording](demo.gif)
 
-> ⚠️ **Private Repository:** This project is currently in early access for **HiveMindInsiders only**. Do not share
-> externally.
 
 ---
 

@@ -196,7 +196,7 @@ HTML = """
 
     <footer>
         <p>&copy; Copyright 2025 - TigreGóticoLda.</p>
-        <button class="btn" onclick="window.open('https://github.com/OpenVoiceOS/OpenVoiceOS/issues', '_blank')" title="Open the issue tracker on GitHub">Report Issue</button>
+        <button class="btn" onclick="window.open('https://github.com/TigreGotico/ovos-busmon/issues', '_blank')" title="Open the issue tracker on GitHub">Report Issue</button>
     </footer>
 
     <script>
