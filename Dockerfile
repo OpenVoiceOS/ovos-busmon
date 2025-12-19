@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY .env .env
 COPY busmon.py .
+COPY templates/ templates/
 
 # Expose port
 EXPOSE 8005
