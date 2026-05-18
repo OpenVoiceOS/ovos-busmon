@@ -1,5 +1,5 @@
 fastapi>=0.110.1
 uvicorn[standard]>=0.29.0
-ovos-bus-client>=2.0.0a1
+ovos-bus-client[async]>=2.0.0
 python-dotenv>=1.0.0
 sse-starlette>=1.6.5

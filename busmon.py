@@ -1,19 +1,18 @@
 import asyncio
 import json
+import os
 import secrets
-import threading
-from datetime import datetime
 from contextlib import asynccontextmanager
+from datetime import datetime
 
-from fastapi import FastAPI, WebSocket, Depends, HTTPException, status
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, status
 from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from ovos_bus_client import MessageBusClient, Message
+from ovos_bus_client import Message
+from ovos_bus_client.client import AsyncMessageBusClient
 from ovos_bus_client.session import SessionManager
 from starlette.websockets import WebSocketState
-
-import os
-from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -24,7 +23,6 @@ PASSWORD = os.getenv("PASSWORD", "ovos")
 app = FastAPI()
 security = HTTPBasic()
 websocket_clients = set()
-main_loop = None
 
 IGNORE_LIST = ["ovos.session.update_default"]
 GUI = ["gui.status.request"]
@@ -357,49 +355,69 @@ async def websocket_endpoint(websocket: WebSocket):
         websocket_clients.remove(websocket)
 
 
-def broadcast(message: dict):
-    global main_loop
+async def _broadcast(message: dict) -> None:
+    """Fan out one bus message to every connected websocket client.
+
+    Sends are gathered so a slow/closed client cannot stall the others.
+    """
     data = json.dumps(message)
-    for ws in list(websocket_clients):
-        if main_loop and ws.application_state == WebSocketState.CONNECTED:
-            asyncio.run_coroutine_threadsafe(ws.send_text(data), main_loop)
+    targets = [ws for ws in list(websocket_clients)
+               if ws.application_state == WebSocketState.CONNECTED]
+    if not targets:
+        return
+    await asyncio.gather(
+        *(ws.send_text(data) for ws in targets),
+        return_exceptions=True,
+    )
 
 
-def run_bus_monitor():
-    client = MessageBusClient()
-
-    def echo(msg: str):
-        m: Message = Message.deserialize(msg)
-        sess = SessionManager.get(m)
-        source = m.context.get("source") if m.context else None
-        dest = m.context.get("destination") if m.context else None
-        standalone_keys = ["session", "source", "destination"]
-        message_data = {
-            "timestamp": datetime.now().isoformat(),
-            "type": m.msg_type,
-            "session": sess.session_id,
-            "session_data": sess.serialize(),
-            "source": source,
-            "destination": dest,
-            "context": {k: v for k, v in m.context.items() if k not in standalone_keys} if m.context else {},
-            "data": m.data or {},
-        }
-        broadcast(message_data)
-
-    client.on("message", echo)
-
-    def run_client():
-        client.run_forever()
-
-    threading.Thread(target=run_client, daemon=True).start()
+def _build_message_payload(raw: str) -> dict:
+    """Decode a raw bus frame into the UI-facing dict."""
+    m: Message = Message.deserialize(raw)
+    sess = SessionManager.get(m)
+    source = m.context.get("source") if m.context else None
+    dest = m.context.get("destination") if m.context else None
+    standalone_keys = ["session", "source", "destination"]
+    return {
+        "timestamp": datetime.now().isoformat(),
+        "type": m.msg_type,
+        "session": sess.session_id,
+        "session_data": sess.serialize(),
+        "source": source,
+        "destination": dest,
+        "context": {k: v for k, v in m.context.items()
+                    if k not in standalone_keys} if m.context else {},
+        "data": m.data or {},
+    }
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global main_loop
-    main_loop = asyncio.get_running_loop()
-    run_bus_monitor()
-    yield
+    """Manage the bus-client lifecycle with FastAPI startup/shutdown.
+
+    The async bus client shares FastAPI's event loop, so the previous
+    daemon-thread + `asyncio.run_coroutine_threadsafe` bridge is gone:
+    handlers schedule broadcasts directly on the running loop.
+    """
+    bus = AsyncMessageBusClient()
+
+    def _on_raw(raw: str) -> None:
+        # Handler dispatch on the async client is synchronous (matches the
+        # pyee EventEmitter contract), but we are already on the asyncio
+        # loop — schedule the awaitable broadcast directly.
+        try:
+            payload = _build_message_payload(raw)
+        except Exception:
+            return  # malformed bus frame; nothing to forward
+        asyncio.create_task(_broadcast(payload))
+
+    bus.on("message", _on_raw)
+    await bus.connect()
+    try:
+        yield
+    finally:
+        bus.remove("message", _on_raw)
+        await bus.close()
 
 
 app.router.lifespan_context = lifespan
