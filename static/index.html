@@ -120,6 +120,7 @@
     <button class="btn" onclick="clearBuffer()">🗑 Clear</button>
     <button class="btn" onclick="exportJSONL()">⬇ Export JSONL</button>
     <button class="btn" onclick="exportJSON()">⬇ Export JSON</button>
+    <button class="btn" onclick="downloadStandalone()" title="Save this page as a local HTML file — use it when the browser blocks ws:// connections from https pages">⬇ Standalone HTML</button>
   </div>
 </div>
 
@@ -169,10 +170,18 @@ let nextId = 0;
  *                AND the page origin matches the API.
  */
 
-const isServedByFastAPI = (() => {
-  const proto = window.location.protocol;
-  return (proto === 'http:' || proto === 'https:') && window.location.hostname !== '';
-})();
+// Transport detection: probe the service API instead of guessing from the URL —
+// a GitHub-Pages-hosted copy of this page is also https+hostname but has no
+// /api endpoints, so only a live /api/status answer selects service mode.
+let transportMode = 'ws';
+
+async function detectTransport() {
+  try {
+    const r = await fetch('api/status', {signal: AbortSignal.timeout(1500)});
+    if (r.ok) return 'sse';
+  } catch (e) { /* no service behind this origin */ }
+  return 'ws';
+}
 
 const badge = document.getElementById('transport-badge');
 const wsConfigPanel = document.getElementById('ws-config-panel');
@@ -191,7 +200,7 @@ function startSSE() {
   setBadge('sse', 'SSE (service)');
 
   // Backfill from ring buffer
-  fetch('/api/messages?since_id=0&limit=500')
+  fetch('api/messages?since_id=0&limit=500')
     .then(r => r.json())
     .then(msgs => {
       msgs.forEach(m => pushMessage(normaliseServiceMsg(m)));
@@ -203,7 +212,7 @@ function startSSE() {
 
 function connectSSE() {
   if (_sseSource) _sseSource.close();
-  _sseSource = new EventSource('/api/stream');
+  _sseSource = new EventSource('api/stream');
   _sseSource.onopen  = () => setBadge('sse', 'SSE (service)');
   _sseSource.onerror = () => setBadge('err', 'SSE error — reconnecting…');
   _sseSource.addEventListener('message', e => {
@@ -283,9 +292,9 @@ async function injectMessage() {
   try { payload = JSON.parse(payloadStr || '{}'); }
   catch(e) { status.textContent = '✗ invalid JSON: ' + e.message; status.style.color='#f44'; return; }
 
-  if (isServedByFastAPI) {
+  if (transportMode === 'sse') {
     // Mode 2 — POST to API
-    const resp = await fetch('/api/send', {
+    const resp = await fetch('api/send', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({type: msgType, data: payload}),
@@ -416,9 +425,9 @@ function clearBuffer() {
 
 // ─── Export ───────────────────────────────────────────────────────────────────
 function exportJSONL() {
-  if (isServedByFastAPI) {
+  if (transportMode === 'sse') {
     // Use the server's full capture buffer
-    window.location.href = '/api/export';
+    window.location.href = 'api/export';
     return;
   }
   const lines = messages.map(m => JSON.stringify(m)).join('\n');
@@ -437,16 +446,29 @@ function download(content, filename, mime) {
   URL.revokeObjectURL(url);
 }
 
+// Save this page as a local file: identical functionality with no
+// mixed-content restrictions (Safari/older Firefox block ws://localhost
+// from https origins; a local file has no such limit).
+async function downloadStandalone() {
+  try {
+    const r = await fetch(window.location.pathname);
+    const html = await r.text();
+    download(html, 'ovos-busmon.html', 'text/html');
+  } catch (e) {
+    download(document.documentElement.outerHTML, 'ovos-busmon.html', 'text/html');
+  }
+}
+
 // ─── Filter listeners ─────────────────────────────────────────────────────────
 ['filter','search','session_filter','source_filter','dest_filter','sort']
   .forEach(id => document.getElementById(id).addEventListener('input', render));
 
 // ─── Startup ──────────────────────────────────────────────────────────────────
-if (isServedByFastAPI) {
-  startSSE();
-} else {
-  startDirectWS();
-}
+detectTransport().then((mode) => {
+  transportMode = mode;
+  if (mode === 'sse') startSSE();
+  else startDirectWS();
+});
 </script>
 </body>
 </html>

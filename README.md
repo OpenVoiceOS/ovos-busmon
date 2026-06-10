@@ -5,6 +5,20 @@ Stream every bus message to a browser, filter by type (glob), inspect payloads, 
 
 ![screenrecording](demo.gif)
 
+## Debug your OVOS device from a URL
+
+The monitor UI is a single static page. Hosted on GitHub Pages, anyone can open
+the URL on a laptop that can reach an OVOS device and connect to its messagebus
+immediately — no install, no server: the page opens a WebSocket straight to
+`ws://localhost:8181/core` (host/port configurable in the connection panel or
+via `?host=&port=` query parameters).
+
+Browser note: Chromium-based browsers allow a `ws://localhost` connection from
+an `https://` page (localhost is a trustworthy origin); Safari and some Firefox
+versions block it. If the connection is refused, use the **Download standalone
+HTML** button in the UI and open the saved file locally — identical
+functionality, no restrictions.
+
 ## Two transport modes — one UI
 
 ### Mode 1 — fully in-browser (zero server)
