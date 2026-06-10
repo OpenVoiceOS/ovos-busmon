@@ -1,0 +1,21 @@
+name: Release Preview (Alpha)
+
+on:
+  push:
+    branches: [dev]
+
+permissions:
+  contents: write
+
+jobs:
+  release_preview:
+    if: github.actor != 'github-actions[bot]'
+    uses: OpenVoiceOS/gh-automations/.github/workflows/release-preview.yml@dev
+    secrets:
+      PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+      MATRIX_TOKEN: ${{ secrets.MATRIX_TOKEN }}
+    with:
+      version_file: 'ovos_busmon/version.py'
+      publish_pypi: true
+      publish_release: true
+      notify_matrix: false

@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ovos-busmon"
+dynamic = ["version"]
+description = "OVOS Messagebus monitor — live stream, filter, capture and inject messages via a web UI"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "JarbasAi", email = "jarbasai@mailfence.com" }]
+requires-python = ">=3.8"
+keywords = ["ovos", "messagebus", "monitor", "debug"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Debuggers",
+]
+dependencies = [
+    "fastapi>=0.110.1",
+    "uvicorn[standard]>=0.29.0",
+    "ovos-bus-client>=2.0.0a1",
+    "python-dotenv>=1.0.0",
+    "sse-starlette>=1.6.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
+    "pytest-cov>=4.1",
+]
+
+[project.scripts]
+ovos-busmon = "ovos_busmon.service:main"
+
+[project.urls]
+Homepage = "https://github.com/TigreGotico/ovos-busmon"
+"Bug Tracker" = "https://github.com/TigreGotico/ovos-busmon/issues"
+
+[tool.setuptools.dynamic]
+version = { attr = "ovos_busmon.version.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ovos_busmon*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["ovos_busmon"]
+omit = ["tests/*"]

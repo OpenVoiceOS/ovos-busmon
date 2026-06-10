@@ -1,12 +1,17 @@
-version: '3.8'
-
 services:
   ovos-busmon:
     build: .
     container_name: ovos-busmon
     image: jarbasai/ovos-busmon:latest
     ports:
-      - "8005:8005"
+      - "127.0.0.1:8005:8005"   # bind to localhost only — do not expose to LAN
     environment:
       - PYTHONUNBUFFERED=1
+      - OVOS_BUS_HOST=host.docker.internal   # reach OVOS on the host
+      - OVOS_BUS_PORT=8181
+      - BUSMON_USERNAME=ovos
+      - BUSMON_PASSWORD=ovos
+      - BUFFER_SIZE=2000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
