@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OVOS Messagebus Monitor</title>
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-okaidia.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; background: #222; color: #fff; padding: 1em; margin: 0; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.5rem 1rem; background-color: #222; border-radius: 8px; margin-bottom: 1rem;
+    }
+    .header img { height: 40px; }
+    .header h1 { color: #f44336; margin: 0; font-size: 1.2rem; }
+    .transport-badge {
+      font-size: 0.75rem; padding: 3px 8px; border-radius: 10px;
+      background: #444; color: #aaa; margin-left: 8px; vertical-align: middle;
+    }
+    .transport-badge.ws  { background: #1a3a1a; color: #4caf50; }
+    .transport-badge.sse { background: #1a2a3a; color: #2196f3; }
+    .transport-badge.err { background: #3a1a1a; color: #f44336; }
+
+    .controls { margin-top: 1rem; text-align: center; }
+    .row { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.4rem; margin-bottom: 0.4rem; }
+    .input, select {
+      background: #444; color: #fff; border: 1px solid #666; border-radius: 4px;
+      padding: 8px 12px; font-size: 0.9em; min-width: 160px; flex: 1 1 160px; max-width: 240px;
+    }
+    .input:focus, select:focus { outline: none; box-shadow: 0 0 4px #f44336; }
+    .btn {
+      padding: 0.6rem 1rem; cursor: pointer; border: none; border-radius: 4px;
+      background-color: #333; color: white; font-weight: bold; margin: 0.2rem;
+    }
+    .btn:hover { background-color: #7a1f1f; }
+    .btn.danger { background-color: #5a1010; }
+    .btn.pause-active { background-color: #7a6010; }
+
+    /* Connection config panel */
+    .config-panel {
+      background: #2a2a2a; border: 1px solid #555; border-radius: 8px;
+      padding: 0.8rem 1rem; margin-bottom: 0.8rem; text-align: left;
+    }
+    .config-panel summary { cursor: pointer; color: #aaa; font-size: 0.9rem; }
+    .config-panel .row { justify-content: flex-start; margin-top: 0.5rem; }
+    .config-panel label { color: #aaa; font-size: 0.85rem; margin-right: 4px; }
+
+    /* Inject panel */
+    .inject-panel {
+      background: #2a2a2a; border: 1px solid #555; border-radius: 8px;
+      padding: 0.8rem 1rem; margin-bottom: 0.8rem; text-align: left;
+    }
+    .inject-panel summary { cursor: pointer; color: #aaa; font-size: 0.9rem; }
+    .inject-panel textarea {
+      background: #333; color: #fff; border: 1px solid #555; border-radius: 4px;
+      padding: 8px; font-family: monospace; font-size: 0.85rem;
+      width: 100%; min-height: 80px; resize: vertical; margin-top: 0.4rem;
+    }
+    .inject-status { font-size: 0.85rem; margin-top: 4px; }
+
+    .msg {
+      border: 1px solid #555; padding: 0.8rem; margin-bottom: 0.8rem;
+      background: #333; border-radius: 8px; cursor: pointer;
+    }
+    .msg-type { color: #f44336; font-weight: bold; }
+    .label { color: #bbb; }
+    .msg-details { display: none; padding-top: 0.8rem; }
+    .msg-section { margin-top: 0.8rem; }
+    .msg-section pre { margin-top: 0.5rem; padding: 10px; background: #444; border-radius: 5px; color: #f8f8f2; overflow: auto; }
+    .msg-section button {
+      margin-top: 0.3rem; padding: 0.3rem 0.6rem; font-size: 0.85em;
+      background-color: #444; color: #fff; border: 1px solid #666; border-radius: 4px; cursor: pointer;
+    }
+    .msg-section button:hover { background-color: #555; }
+
+    .status-bar { font-size: 0.8rem; color: #888; text-align: right; margin-bottom: 4px; }
+    footer { margin-top: 1rem; background-color: #222; padding: 1rem; border-radius: 8px; text-align: center; }
+    footer p { color: #fff; margin: 0; }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <div style="display:flex;align-items:center;gap:0.6rem;">
+    <img src="https://www.openvoiceos.org/_next/static/media/logo.02220a9b.png" alt="OVOS Logo">
+    <h1>OpenVoiceOS Messagebus Monitor
+      <span id="transport-badge" class="transport-badge">connecting…</span>
+    </h1>
+  </div>
+</header>
+
+<!-- Connection Config (Mode 1 only — hidden when served by FastAPI) -->
+<details class="config-panel" id="ws-config-panel">
+  <summary>Direct WebSocket connection settings</summary>
+  <div class="row">
+    <label>Host: <input type="text" id="ws-host" class="input" value="localhost" style="width:140px;flex:none;"></label>
+    <label>Port: <input type="number" id="ws-port" class="input" value="8181" style="width:90px;flex:none;"></label>
+    <label>Path: <input type="text" id="ws-path" class="input" value="/core" style="width:100px;flex:none;"></label>
+    <button class="btn" onclick="reconnectWS()">Connect</button>
+  </div>
+</details>
+
+<div class="controls">
+  <div class="row">
+    <input type="text" id="filter"        class="input" placeholder="Filter by type (glob, e.g. ovos.*)">
+    <input type="text" id="search"        class="input" placeholder="Search content">
+    <input type="text" id="session_filter" class="input" placeholder="Filter by session_id">
+    <input type="text" id="source_filter" class="input" placeholder="Filter by source">
+    <input type="text" id="dest_filter"   class="input" placeholder="Filter by destination">
+    <select id="sort" class="input">
+      <option value="desc">Newest First</option>
+      <option value="asc">Oldest First</option>
+    </select>
+  </div>
+  <div>
+    <button class="btn" id="pause-btn" onclick="togglePause()">⏸ Pause</button>
+    <button class="btn" onclick="clearBuffer()">🗑 Clear</button>
+    <button class="btn" onclick="exportJSONL()">⬇ Export JSONL</button>
+    <button class="btn" onclick="exportJSON()">⬇ Export JSON</button>
+  </div>
+</div>
+
+<!-- Inject panel -->
+<details class="inject-panel">
+  <summary>Inject message onto the bus (power tool — use with care)</summary>
+  <div class="row" style="margin-top:0.5rem;">
+    <input type="text" id="inject-type" class="input" placeholder="Message type (e.g. speak)" style="flex:0 1 240px;">
+    <label style="color:#aaa;font-size:0.85rem;align-self:center;">Payload JSON (data):</label>
+  </div>
+  <textarea id="inject-payload">{}</textarea>
+  <div>
+    <button class="btn danger" onclick="injectMessage()">⚡ Send message</button>
+    <span id="inject-status" class="inject-status"></span>
+  </div>
+</details>
+
+<div class="status-bar" id="status-bar">No messages yet.</div>
+<div class="container"><div id="log"></div></div>
+
+<footer>
+  <p>&copy; 2025 TigreGóticoLda.</p>
+  <button class="btn" onclick="window.open('https://github.com/TigreGotico/ovos-busmon/issues','_blank')">Report Issue</button>
+</footer>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────────────
+const MAX_BUFFER = 2000;
+let messages = [];
+let paused = false;
+let nextId = 0;
+
+// ─── Transport abstraction ────────────────────────────────────────────────────
+/**
+ * Two transport modes:
+ *
+ * MODE 1 (directWS): page loaded as a static file or via GitHub Pages.
+ *   Opens a WebSocket directly to the OVOS bus.
+ *   Config: ws-host / ws-port / ws-path inputs (also ?host=&port=&path= query params).
+ *   Received frames are raw bus JSON (type/data/context).
+ *
+ * MODE 2 (serviceSSE): page served from the FastAPI app (same origin).
+ *   Uses SSE /api/stream for live tail + GET /api/messages for backfill.
+ *   The UI sends inject requests to POST /api/send.
+ *   Detected by: window.location.protocol === 'http:' (or https:) AND
+ *                window.location.hostname !== '' (not file://)
+ *                AND the page origin matches the API.
+ */
+
+const isServedByFastAPI = (() => {
+  const proto = window.location.protocol;
+  return (proto === 'http:' || proto === 'https:') && window.location.hostname !== '';
+})();
+
+const badge = document.getElementById('transport-badge');
+const wsConfigPanel = document.getElementById('ws-config-panel');
+
+function setBadge(mode, text) {
+  badge.textContent = text;
+  badge.className = 'transport-badge ' + mode;
+}
+
+// ─── MODE 2: SSE transport ────────────────────────────────────────────────────
+let _sseLastId = 0;
+let _sseSource = null;
+
+function startSSE() {
+  wsConfigPanel.style.display = 'none';
+  setBadge('sse', 'SSE (service)');
+
+  // Backfill from ring buffer
+  fetch('/api/messages?since_id=0&limit=500')
+    .then(r => r.json())
+    .then(msgs => {
+      msgs.forEach(m => pushMessage(normaliseServiceMsg(m)));
+      _sseLastId = msgs.length ? msgs[msgs.length - 1].id : 0;
+      connectSSE();
+    })
+    .catch(() => connectSSE());
+}
+
+function connectSSE() {
+  if (_sseSource) _sseSource.close();
+  _sseSource = new EventSource('/api/stream');
+  _sseSource.onopen  = () => setBadge('sse', 'SSE (service)');
+  _sseSource.onerror = () => setBadge('err', 'SSE error — reconnecting…');
+  _sseSource.addEventListener('message', e => {
+    const msg = JSON.parse(e.data);
+    pushMessage(normaliseServiceMsg(msg));
+  });
+}
+
+function normaliseServiceMsg(m) {
+  // Service already returns the rich dict
+  return m;
+}
+
+// ─── MODE 1: Direct WebSocket transport ──────────────────────────────────────
+let _ws = null;
+
+function wsUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const host = params.get('host') || document.getElementById('ws-host').value || 'localhost';
+  const port = params.get('port') || document.getElementById('ws-port').value || '8181';
+  const path = params.get('path') || document.getElementById('ws-path').value || '/core';
+  document.getElementById('ws-host').value = host;
+  document.getElementById('ws-port').value = port;
+  document.getElementById('ws-path').value = path;
+  return `ws://${host}:${port}${path}`;
+}
+
+function startDirectWS() {
+  wsConfigPanel.style.display = '';
+  connectWS();
+}
+
+function connectWS() {
+  if (_ws) { try { _ws.close(); } catch(e) {} }
+  const url = wsUrl();
+  setBadge('', 'connecting to ' + url + '…');
+  _ws = new WebSocket(url);
+  _ws.onopen  = () => setBadge('ws', 'WS → ' + url);
+  _ws.onerror = () => setBadge('err', 'WS error');
+  _ws.onclose = () => { setBadge('err', 'WS closed — reconnecting in 3s…'); setTimeout(connectWS, 3000); };
+  _ws.onmessage = e => {
+    try {
+      const raw = JSON.parse(e.data);
+      pushMessage(normaliseBusFrame(raw));
+    } catch(ex) { /* ignore malformed */ }
+  };
+}
+
+function reconnectWS() { connectWS(); }
+
+function normaliseBusFrame(raw) {
+  // Raw bus frame: {type, data, context}
+  const ctx = raw.context || {};
+  return {
+    id: ++nextId,
+    timestamp: ctx.timestamp || new Date().toISOString(),
+    type: raw.type || raw.msg_type || '?',
+    data: raw.data || {},
+    context: ctx,
+    session: ctx.session_id || null,
+    source: ctx.source || null,
+    destination: Array.isArray(ctx.destination)
+      ? ctx.destination.join(',')
+      : (ctx.destination || null),
+    session_data: {},
+  };
+}
+
+// ─── Inject ───────────────────────────────────────────────────────────────────
+async function injectMessage() {
+  const msgType = document.getElementById('inject-type').value.trim();
+  const payloadStr = document.getElementById('inject-payload').value.trim();
+  const status = document.getElementById('inject-status');
+  if (!msgType) { status.textContent = '✗ message type is required'; status.style.color='#f44'; return; }
+
+  let payload;
+  try { payload = JSON.parse(payloadStr || '{}'); }
+  catch(e) { status.textContent = '✗ invalid JSON: ' + e.message; status.style.color='#f44'; return; }
+
+  if (isServedByFastAPI) {
+    // Mode 2 — POST to API
+    const resp = await fetch('/api/send', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({type: msgType, data: payload}),
+    });
+    if (resp.ok) { status.textContent = '✓ sent'; status.style.color='#4f4'; }
+    else { status.textContent = '✗ ' + await resp.text(); status.style.color='#f44'; }
+  } else {
+    // Mode 1 — send directly on the WebSocket
+    if (!_ws || _ws.readyState !== WebSocket.OPEN) {
+      status.textContent = '✗ WebSocket not connected'; status.style.color='#f44'; return;
+    }
+    _ws.send(JSON.stringify({type: msgType, data: payload, context: {}}));
+    status.textContent = '✓ sent'; status.style.color='#4f4';
+  }
+  setTimeout(() => status.textContent = '', 3000);
+}
+
+// ─── Render ───────────────────────────────────────────────────────────────────
+function globMatch(text, pattern) {
+  if (!pattern || pattern === '*') return true;
+  // Convert glob to regex
+  const re = new RegExp('^' + pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$', 'i');
+  return re.test(text);
+}
+
+function matchesSearch(msg, text) {
+  if (!text) return true;
+  text = text.toLowerCase();
+  return JSON.stringify(msg).toLowerCase().includes(text);
+}
+
+function filteredMessages() {
+  const fType   = document.getElementById('filter').value.trim();
+  const fSearch = document.getElementById('search').value.trim();
+  const fSess   = document.getElementById('session_filter').value.trim().toLowerCase();
+  const fSrc    = document.getElementById('source_filter').value.trim().toLowerCase();
+  const fDst    = document.getElementById('dest_filter').value.trim().toLowerCase();
+
+  return messages.filter(m =>
+    globMatch(m.type, fType) &&
+    matchesSearch(m, fSearch) &&
+    (!fSess || String(m.session||'').toLowerCase().includes(fSess)) &&
+    (!fSrc  || String(m.source||'').toLowerCase().includes(fSrc)) &&
+    (!fDst  || String(m.destination||'').toLowerCase().includes(fDst))
+  );
+}
+
+function render() {
+  const log  = document.getElementById('log');
+  const sort = document.getElementById('sort').value;
+  const msgs = filteredMessages();
+  const ordered = sort === 'asc' ? [...msgs] : [...msgs].reverse();
+
+  document.getElementById('status-bar').textContent =
+    `${messages.length} captured, ${msgs.length} visible`;
+
+  log.innerHTML = '';
+  for (const msg of ordered) {
+    const div = document.createElement('div');
+    div.className = 'msg';
+    const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleString() : '';
+
+    let sections = '';
+    if (Object.keys(msg.data || {}).length) {
+      sections += msgSection(`data-${msg.id}`, 'message.data', msg.data);
+    }
+    if (Object.keys(msg.context || {}).length) {
+      sections += msgSection(`ctx-${msg.id}`, 'message.context', msg.context);
+    }
+    if (Object.keys(msg.session_data || {}).length) {
+      sections += msgSection(`sess-${msg.id}`, 'session', msg.session_data);
+    }
+
+    div.innerHTML = `
+      <div class="msg-type">${esc(msg.type)}</div>
+      <div><span class="label">Timestamp:</span> ${esc(ts)}</div>
+      <div>
+        ${msg.session     ? `<span class="label">session_id:</span> ${esc(msg.session)} ` : ''}
+        ${msg.source      ? `<span class="label">| source:</span> ${esc(msg.source)} ` : ''}
+        ${msg.destination ? `<span class="label">| destination:</span> ${esc(msg.destination)}` : ''}
+      </div>
+      ${sections}
+    `;
+    log.appendChild(div);
+  }
+  Prism.highlightAll();
+}
+
+function msgSection(id, label, obj) {
+  return `<div class="msg-section">
+    <button onclick="toggleVis('${id}')">▶ ${label}</button>
+    <div id="${id}" class="msg-details" style="display:none;">
+      <pre class="language-json">${esc(JSON.stringify(obj, null, 2))}</pre>
+    </div>
+  </div>`;
+}
+
+function toggleVis(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = el.style.display === 'block' ? 'none' : 'block';
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ─── Buffer management ────────────────────────────────────────────────────────
+function pushMessage(msg) {
+  if (paused) return;
+  if (!msg.id) msg.id = ++nextId;
+  messages.push(msg);
+  if (messages.length > MAX_BUFFER) messages.splice(0, messages.length - MAX_BUFFER);
+  render();
+}
+
+function togglePause() {
+  paused = !paused;
+  const btn = document.getElementById('pause-btn');
+  btn.textContent = paused ? '▶ Resume' : '⏸ Pause';
+  btn.classList.toggle('pause-active', paused);
+}
+
+function clearBuffer() {
+  messages = [];
+  render();
+}
+
+// ─── Export ───────────────────────────────────────────────────────────────────
+function exportJSONL() {
+  if (isServedByFastAPI) {
+    // Use the server's full capture buffer
+    window.location.href = '/api/export';
+    return;
+  }
+  const lines = messages.map(m => JSON.stringify(m)).join('\n');
+  download(lines, 'bus_messages.jsonl', 'application/x-ndjson');
+}
+
+function exportJSON() {
+  download(JSON.stringify(messages, null, 2), 'bus_messages.json', 'application/json');
+}
+
+function download(content, filename, mime) {
+  const blob = new Blob([content], {type: mime});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─── Filter listeners ─────────────────────────────────────────────────────────
+['filter','search','session_filter','source_filter','dest_filter','sort']
+  .forEach(id => document.getElementById(id).addEventListener('input', render));
+
+// ─── Startup ──────────────────────────────────────────────────────────────────
+if (isServedByFastAPI) {
+  startSSE();
+} else {
+  startDirectWS();
+}
+</script>
+</body>
+</html>

@@ -1,19 +1,39 @@
-# Use an official Python base image
-FROM python:3.14-slim
+# ── Stage 1: build wheel ──────────────────────────────────────────────────────
+FROM python:3.12-slim AS builder
 
-# Set working directory
+WORKDIR /build
+
+COPY pyproject.toml ./
+COPY ovos_busmon/ ./ovos_busmon/
+COPY static/ ./static/
+
+RUN pip install --no-cache-dir build && \
+    python -m build --wheel --outdir /dist
+
+
+# ── Stage 2: runtime ──────────────────────────────────────────────────────────
+FROM python:3.12-slim
+
 WORKDIR /app
 
-# Install dependencies
+# Install runtime deps first (layer cache)
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --pre -r requirements.txt
 
+# Install the built wheel
+COPY --from=builder /dist/*.whl /tmp/
+RUN pip install --no-cache-dir /tmp/*.whl && rm /tmp/*.whl
 
-COPY .env .env
-COPY busmon.py .
+# Copy static UI
+COPY --from=builder /build/static /app/static
 
-# Expose port
+# Drop to non-root
+RUN adduser --disabled-password --gecos '' busmon
+USER busmon
+
 EXPOSE 8005
 
-# Run the app
-CMD ["python", "busmon.py"]
+ENV BUSMON_HOST=0.0.0.0
+ENV BUSMON_PORT=8005
+
+CMD ["ovos-busmon"]
