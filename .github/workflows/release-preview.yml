@@ -8,9 +8,6 @@ on:
 jobs:
   release_preview:
     uses: OpenVoiceOS/gh-automations/.github/workflows/release-preview.yml@82252c363b239fe5c60dc0ae2a4e81721d4cabef
-    secrets:
-      PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
-      MATRIX_TOKEN: ${{ secrets.MATRIX_TOKEN }}
     with:
       package_name: 'ovos_busmon'
       version_file: 'ovos_busmon/version.py'
