@@ -132,6 +132,10 @@
     <label style="color:#aaa;font-size:0.85rem;align-self:center;">Payload JSON (data):</label>
   </div>
   <textarea id="inject-payload">{}</textarea>
+  <div class="row" style="margin-top:0.5rem;">
+    <label style="color:#aaa;font-size:0.85rem;align-self:center;">Context JSON (optional):</label>
+  </div>
+  <textarea id="inject-context">{}</textarea>
   <div>
     <button class="btn danger" onclick="injectMessage()">⚡ Send message</button>
     <span id="inject-status" class="inject-status"></span>
@@ -285,19 +289,24 @@ function normaliseBusFrame(raw) {
 async function injectMessage() {
   const msgType = document.getElementById('inject-type').value.trim();
   const payloadStr = document.getElementById('inject-payload').value.trim();
+  const contextStr = document.getElementById('inject-context').value.trim();
   const status = document.getElementById('inject-status');
   if (!msgType) { status.textContent = '✗ message type is required'; status.style.color='#f44'; return; }
 
-  let payload;
+  let payload, context;
   try { payload = JSON.parse(payloadStr || '{}'); }
-  catch(e) { status.textContent = '✗ invalid JSON: ' + e.message; status.style.color='#f44'; return; }
+  catch(e) { status.textContent = '✗ invalid data JSON: ' + e.message; status.style.color='#f44'; return; }
+  try { context = JSON.parse(contextStr || '{}'); }
+  catch(e) { status.textContent = '✗ invalid context JSON: ' + e.message; status.style.color='#f44'; return; }
 
   if (transportMode === 'sse') {
-    // Mode 2 — POST to API
+    // Mode 2 — POST to API. The service's own bus listener rebroadcasts
+    // whatever it emits, so the sent message reappears in the live stream
+    // like any other — no special-casing needed here.
     const resp = await fetch('api/send', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({type: msgType, data: payload}),
+      body: JSON.stringify({type: msgType, data: payload, context: context}),
     });
     if (resp.ok) { status.textContent = '✓ sent'; status.style.color='#4f4'; }
     else { status.textContent = '✗ ' + await resp.text(); status.style.color='#f44'; }
@@ -306,7 +315,7 @@ async function injectMessage() {
     if (!_ws || _ws.readyState !== WebSocket.OPEN) {
       status.textContent = '✗ WebSocket not connected'; status.style.color='#f44'; return;
     }
-    _ws.send(JSON.stringify({type: msgType, data: payload, context: {}}));
+    _ws.send(JSON.stringify({type: msgType, data: payload, context: context}));
     status.textContent = '✓ sent'; status.style.color='#4f4';
   }
   setTimeout(() => status.textContent = '', 3000);
