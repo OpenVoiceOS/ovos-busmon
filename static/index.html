@@ -83,6 +83,35 @@
 
     .status-bar { font-size: 0.8rem; color: #888; text-align: right; margin-bottom: 4px; }
 
+    /* Chat panel */
+    .layout { display: flex; gap: 1rem; align-items: flex-start; }
+    .layout .container { flex: 1 1 auto; min-width: 0; }
+    .chat-panel {
+      flex: 0 0 320px; max-width: 320px; display: none;
+      background: #2a2a2a; border: 1px solid #555; border-radius: 8px;
+      padding: 0.8rem; position: sticky; top: 0.5rem;
+    }
+    .chat-panel.open { display: flex; flex-direction: column; }
+    .chat-panel h2 { margin: 0 0 0.5rem 0; font-size: 1rem; color: #f44336; }
+    .chat-hint { font-size: 0.75rem; color: #888; margin-bottom: 0.5rem; }
+    .chat-log {
+      flex: 1 1 auto; min-height: 200px; max-height: 60vh; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.5rem;
+    }
+    .chat-bubble {
+      padding: 0.5rem 0.7rem; border-radius: 10px; font-size: 0.88rem; max-width: 90%;
+      word-wrap: break-word; white-space: pre-wrap;
+    }
+    .chat-bubble.me    { align-self: flex-end;   background: #f44336; color: #fff; }
+    .chat-bubble.assistant { align-self: flex-start; background: #444; color: #eee; }
+    .chat-bubble.error { align-self: flex-start; background: #5a1010; color: #f88; }
+    .chat-input-row { display: flex; gap: 0.4rem; }
+    .chat-input-row input {
+      flex: 1 1 auto; background: #444; color: #fff; border: 1px solid #666;
+      border-radius: 4px; padding: 6px 10px; font-size: 0.9em;
+    }
+    .chat-session-id { font-family: monospace; font-size: 0.7rem; color: #666; margin-top: 0.4rem; }
+
     /* Timeline view */
     .trace {
       border: 1px solid #555; border-radius: 8px; margin-bottom: 0.8rem; background: #2c2c2c;
@@ -153,6 +182,7 @@
   </div>
   <div>
     <button class="btn" id="view-btn" onclick="toggleView()">🗂 Timeline view</button>
+    <button class="btn" id="chat-btn" onclick="toggleChat()">💬 Chat</button>
     <button class="btn" id="pause-btn" onclick="togglePause()">⏸ Pause</button>
     <button class="btn" onclick="clearBuffer()">🗑 Clear</button>
     <button class="btn" onclick="exportJSONL()">⬇ Export JSONL</button>
@@ -189,8 +219,24 @@
   </div>
 </details>
 
-<div class="status-bar" id="status-bar">No messages yet.</div>
-<div class="container"><div id="log"></div></div>
+<div class="layout">
+  <div class="container">
+    <div class="status-bar" id="status-bar">No messages yet.</div>
+    <div id="log"></div>
+  </div>
+
+  <!-- Chat panel: converse with the assistant over one stable Session. -->
+  <div class="chat-panel" id="chat-panel">
+    <h2>💬 Chat</h2>
+    <div class="chat-hint">Requires service mode (SSE) — sends via the authenticated <code>/api/chat</code> endpoint.</div>
+    <div class="chat-log" id="chat-log"></div>
+    <div class="chat-input-row">
+      <input type="text" id="chat-input" placeholder="Type a message…" autocomplete="off">
+      <button class="btn" onclick="sendChat()">Send</button>
+    </div>
+    <div class="chat-session-id">session: <span id="chat-session-id-label"></span></div>
+  </div>
+</div>
 
 <footer>
   <p>&copy; 2025 TigreGóticoLda.</p>
@@ -596,6 +642,7 @@ function esc(s) {
 // status bar. Pause stops ingestion entirely (manual, or automatically the
 // moment an incoming message matches the active filters).
 function pushMessage(msg) {
+  handleChatReply(msg);
   if (paused) return;
   if (!msg.id) msg.id = ++nextId;
   messages.push(msg);
@@ -679,6 +726,85 @@ async function downloadStandalone() {
     download(html, 'ovos-busmon.html', 'text/html');
   } catch (e) {
     download(document.documentElement.outerHTML, 'ovos-busmon.html', 'text/html');
+  }
+}
+
+// ─── Chat panel ───────────────────────────────────────────────────────────────
+// One stable Session per browser tab (persisted in sessionStorage so a
+// reload keeps the same conversation), reused for every turn so
+// converse/multi-turn context on the OVOS side works. Never "default".
+function getChatSessionId() {
+  const KEY = 'busmon-chat-session-id';
+  let id = sessionStorage.getItem(KEY);
+  if (!id) {
+    id = 'busmon-chat-' + (crypto.randomUUID ? crypto.randomUUID() : (Date.now() + '-' + Math.random().toString(16).slice(2)));
+    sessionStorage.setItem(KEY, id);
+  }
+  return id;
+}
+
+const chatSessionId = getChatSessionId();
+document.getElementById('chat-session-id-label').textContent = chatSessionId;
+
+let chatOpen = false;
+
+function toggleChat() {
+  chatOpen = !chatOpen;
+  const panel = document.getElementById('chat-panel');
+  const btn = document.getElementById('chat-btn');
+  panel.classList.toggle('open', chatOpen);
+  btn.classList.toggle('pause-active', chatOpen);
+  if (chatOpen) document.getElementById('chat-input').focus();
+}
+
+function appendChatBubble(kind, text) {
+  const log = document.getElementById('chat-log');
+  const div = document.createElement('div');
+  div.className = 'chat-bubble ' + kind;
+  div.textContent = text;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  if (transportMode !== 'sse') {
+    appendChatBubble('error', 'Chat requires service (SSE) mode — this page is in direct WebSocket mode.');
+    return;
+  }
+  appendChatBubble('me', text);
+  input.value = '';
+  try {
+    const resp = await fetch('api/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({utterance: text, lang: 'en-us', session_id: chatSessionId}),
+    });
+    if (!resp.ok) {
+      appendChatBubble('error', 'Send failed: ' + await resp.text());
+    }
+  } catch (e) {
+    appendChatBubble('error', 'Send failed: ' + e.message);
+  }
+}
+
+document.getElementById('chat-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') sendChat();
+});
+
+// Render only the two reply shapes the chat panel understands, and only
+// when they belong to *this* browser session — every other bus message
+// keeps flowing through the normal log/timeline unaffected.
+function handleChatReply(msg) {
+  if (msg.session !== chatSessionId) return;
+  const t = (msg.type || '').toLowerCase();
+  if (t === 'speak') {
+    const utt = (msg.data && msg.data.utterance) || '';
+    if (utt) appendChatBubble('assistant', utt);
+  } else if (t === 'complete_intent_failure') {
+    appendChatBubble('error', 'No response (complete_intent_failure)');
   }
 }
 

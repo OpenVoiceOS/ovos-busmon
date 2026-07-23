@@ -155,6 +155,117 @@ async def test_send_ok(client):
 
 
 @pytest.mark.asyncio
+async def test_chat_requires_auth():
+    """POST /api/chat must reject unauthenticated requests, same as /api/send."""
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test",
+    ) as c:
+        r = await c.post("/api/chat", json={"utterance": "hi", "session_id": "s1"})
+    assert r.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_chat_rejects_empty_utterance(client):
+    r = await client.post("/api/chat", json={"utterance": "   ", "session_id": "s1"})
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_chat_rejects_missing_session_id(client):
+    r = await client.post("/api/chat", json={"utterance": "hi"})
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_chat_payload_shape(client):
+    """The emitted Message must be shaped exactly like a real text client
+    builds it (ovos-say-to / ovos-simple-cli): recognizer_loop:utterance
+    with {"utterances": [text], "lang": lang}, and a Session embedded in
+    context["session"] carrying the *same* session_id sent by the client
+    (never "default"), so converse/multi-turn context works across turns.
+    """
+    from ovos_busmon import service as svc
+
+    captured = {}
+
+    class _RecordingBus:
+        def __init__(self, **kw):
+            pass
+
+        async def connect(self):
+            pass
+
+        async def close(self):
+            pass
+
+        async def emit(self, msg):
+            captured["msg_type"] = msg.msg_type
+            captured["data"] = msg.data
+            captured["context"] = msg.context
+
+    with patch("ovos_bus_client.client.AsyncMessageBusClient", _RecordingBus):
+        r = await client.post(
+            "/api/chat",
+            json={"utterance": "what time is it", "lang": "en-us", "session_id": "chat-abc123"},
+        )
+
+    assert r.status_code == 202
+    assert r.json()["ok"] is True
+    assert captured["msg_type"] == "recognizer_loop:utterance"
+    assert captured["data"] == {"utterances": ["what time is it"], "lang": "en-us"}
+    sess = captured["context"]["session"]
+    assert sess["session_id"] == "chat-abc123"
+    assert sess["session_id"] != "default"
+
+
+@pytest.mark.asyncio
+async def test_chat_speak_reply_reaches_stream_for_matching_session():
+    """A mocked ``speak`` reply carrying the same session_id used by
+    /api/chat must reach the SSE stream (what the chat panel filters on
+    client-side to render an assistant bubble).
+    """
+    from ovos_busmon.service import _broadcast_to_sse, _subscribers
+    from ovos_busmon.buffer import CapturedMessage
+
+    session_id = "chat-abc123"
+    q: asyncio.Queue = asyncio.Queue(maxsize=10)
+    _subscribers.add(q)
+    try:
+        payload = CapturedMessage(
+            id=1,
+            timestamp="2025-01-01T00:00:00+00:00",
+            msg_type="speak",
+            data={"utterance": "It is noon."},
+            context={"session": {"session_id": session_id}},
+            session=session_id,
+        ).to_dict()
+        await _broadcast_to_sse(payload)
+
+        assert not q.empty()
+        received = q.get_nowait()
+        assert received["type"] == "speak"
+        assert received["session"] == session_id
+        assert received["data"]["utterance"] == "It is noon."
+
+        # A speak for a *different* session must not be mistaken as ours —
+        # the client-side filter (msg.session === chatSessionId) relies on
+        # this same field.
+        other = CapturedMessage(
+            id=2,
+            timestamp="2025-01-01T00:00:01+00:00",
+            msg_type="speak",
+            data={"utterance": "not for you"},
+            context={"session": {"session_id": "someone-else"}},
+            session="someone-else",
+        ).to_dict()
+        await _broadcast_to_sse(other)
+        received2 = q.get_nowait()
+        assert received2["session"] != session_id
+    finally:
+        _subscribers.discard(q)
+
+
+@pytest.mark.asyncio
 async def test_sse_stream_broadcasts():
     """Messages pushed via _broadcast_to_sse appear in a subscriber queue."""
     from ovos_busmon.service import _broadcast_to_sse, _subscribers

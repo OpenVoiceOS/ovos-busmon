@@ -209,6 +209,12 @@ class SendRequest(BaseModel):
     context: dict = {}
 
 
+class ChatRequest(BaseModel):
+    utterance: str
+    lang: str = "en-us"
+    session_id: str
+
+
 @app.get("/api/status")
 async def api_status(_: str = Depends(_verify)):
     return {
@@ -267,6 +273,44 @@ async def api_send(req: SendRequest, _: str = Depends(_verify)):
         await bus.connect()
         await bus.emit(Message(req.type, req.data, req.context))
         await bus.close()
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Bus unavailable: {e}")
+    return {"ok": True}
+
+
+@app.post("/api/chat", status_code=202)
+async def api_chat(req: ChatRequest, _: str = Depends(_verify)):
+    """Emit a text utterance built exactly like a real text client (e.g.
+    ``ovos-say-to`` / ``ovos-simple-cli``): ``recognizer_loop:utterance`` with
+    ``{"utterances": [text], "lang": lang}`` and a Session embedded in
+    ``context["session"]`` so the pipeline treats every turn from the same
+    browser session as one conversation (multi-turn / converse works).
+    """
+    utterance = req.utterance.strip()
+    if not utterance:
+        raise HTTPException(status_code=422, detail="utterance must not be empty")
+    if not req.session_id or not req.session_id.strip():
+        raise HTTPException(status_code=422, detail="session_id must not be empty")
+
+    try:
+        from ovos_bus_client import Message
+        from ovos_bus_client.client import AsyncMessageBusClient
+        from ovos_bus_client.session import Session
+
+        sess = Session(session_id=req.session_id, lang=req.lang)
+        context = {"source": "ovos-busmon-chat", "session": sess.serialize()}
+        msg = Message(
+            "recognizer_loop:utterance",
+            {"utterances": [utterance], "lang": req.lang},
+            context,
+        )
+
+        bus = AsyncMessageBusClient(host=OVOS_BUS_HOST, port=OVOS_BUS_PORT)
+        await bus.connect()
+        await bus.emit(msg)
+        await bus.close()
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Bus unavailable: {e}")
     return {"ok": True}
