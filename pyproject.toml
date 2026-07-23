@@ -9,7 +9,7 @@ description = "OVOS Messagebus monitor — live stream, filter, capture and inje
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "JarbasAi", email = "jarbasai@mailfence.com" }]
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 keywords = ["ovos", "messagebus", "monitor", "debug"]
 classifiers = [
     "License :: OSI Approved :: MIT License",

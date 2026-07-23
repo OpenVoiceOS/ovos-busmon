@@ -17,12 +17,9 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # Install runtime deps first (layer cache)
-COPY requirements.txt ./
-RUN pip install --no-cache-dir --pre -r requirements.txt
-
 # Install the built wheel
 COPY --from=builder /dist/*.whl /tmp/
-RUN pip install --no-cache-dir /tmp/*.whl && rm /tmp/*.whl
+RUN pip install --no-cache-dir --pre /tmp/*.whl && rm /tmp/*.whl
 
 # Copy static UI
 COPY --from=builder /build/static /app/static
