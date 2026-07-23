@@ -1,0 +1,12 @@
+name: Repo Health
+
+on:
+  pull_request:
+    branches: [dev, master, main]
+  workflow_dispatch:
+
+jobs:
+  repo_health:
+    uses: OpenVoiceOS/gh-automations/.github/workflows/repo-health.yml@82252c363b239fe5c60dc0ae2a4e81721d4cabef
+    with:
+      version_file: 'ovos_busmon/version.py'
