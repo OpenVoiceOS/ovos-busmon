@@ -216,6 +216,9 @@ async def test_chat_payload_shape(client):
     sess = captured["context"]["session"]
     assert sess["session_id"] == "chat-abc123"
     assert sess["session_id"] != "default"
+    # SESSION-1: empty pipeline == omission — busmon must NOT push its own
+    # (client-side default) pipeline into the server's session.
+    assert sess.get("pipeline", []) == []
 
 
 @pytest.mark.asyncio

@@ -297,6 +297,10 @@ async def api_chat(req: ChatRequest, _: str = Depends(_verify)):
         from ovos_bus_client.session import Session
 
         sess = Session(session_id=req.session_id, lang=req.lang)
+        # SESSION-1: an empty pipeline list means "use the server's default".
+        # Serializing this client's default pipeline would override the
+        # core's configured pipeline with plugins that may not exist there.
+        sess.pipeline = []
         context = {"source": "ovos-busmon-chat", "session": sess.serialize()}
         msg = Message(
             "recognizer_loop:utterance",
