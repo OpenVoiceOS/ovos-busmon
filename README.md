@@ -5,6 +5,10 @@ Stream every bus message to a browser, filter by type (glob), inspect payloads, 
 
 ![screenrecording](demo.gif)
 
+![timeline view tracing one interaction](docs/img/timeline-view.png)
+
+See [docs/usage.md](docs/usage.md) for a full walkthrough with screenshots.
+
 ## Debug your OVOS device from a URL
 
 The monitor UI is a single static page. Hosted on GitHub Pages, anyone can open
@@ -46,6 +50,7 @@ It connects **server-side** to the bus via `ovos-bus-client` and serves:
 | `GET /api/messages` | Ring buffer contents (`?since_id=N&limit=M`) |
 | `GET /api/stream` | SSE live tail |
 | `POST /api/send` | Inject a message onto the bus |
+| `POST /api/chat` | Send a text utterance as a real client would (chat panel) |
 | `GET /api/export` | JSONL download of the full capture buffer |
 
 The UI auto-detects which transport to use:
@@ -61,7 +66,7 @@ pip install ovos-busmon
 Or from source:
 
 ```bash
-git clone https://github.com/TigreGotico/ovos-busmon
+git clone https://github.com/OpenVoiceOS/ovos-busmon
 cd ovos-busmon
 pip install -e .[dev]
 ```
@@ -104,14 +109,17 @@ By default the service binds only to `127.0.0.1`; do not expose it to untrusted 
 
 ## Features
 
-- Live message stream with expandable, syntax-highlighted JSON
+- Live message stream with expandable, syntax-highlighted JSON (vendored highlighter — fully offline, no CDN)
+- Timeline view: group the stream by session into expandable per-interaction traces with category badges
+- Chat panel: converse with the assistant in text with a stable session id (multi-turn/converse works) while watching the bus handle each turn
 - Filter by message type (glob patterns — e.g. `ovos.*`, `recognizer_loop:*`)
 - Full-text search across type / data / context / session
 - Filter by session ID, source, destination
 - Sort newest-first or oldest-first
-- Pause/resume capture
+- Pause/resume capture, plus auto-pause on filter match
+- Bounded client-side buffer (configurable, dropped-count visible)
 - Export as JSONL or JSON (client-side or via `/api/export`)
-- Message injection (type + JSON payload → bus)
+- Message injection (type + JSON `data` + optional JSON `context` → bus)
 - Ring buffer with configurable capacity and `since_id` pagination
 - GitHub Pages deployable (Mode 1 — no server needed)
 
@@ -129,6 +137,13 @@ HTTP Basic auth protects the service endpoint, but credentials are sent in plain
 Keep the default `127.0.0.1` binding.
 The injection endpoint gives anyone who can reach it full ability to emit any message on the bus.
 Do not expose it to the public internet or run it unattended.
+
+## Related projects
+
+- [ovos-messagebus](https://github.com/OpenVoiceOS/ovos-messagebus) — the bus server this tool monitors
+- [ovos-bus-client](https://github.com/OpenVoiceOS/ovos-bus-client) — the client library used in service mode
+- [ovos-core](https://github.com/OpenVoiceOS/ovos-core) — the intent pipeline whose traffic you'll be tracing
+- [hivemind-core](https://github.com/JarbasHiveMind/hivemind-core) — protected remote access to a bus, busmon works there too
 
 ## License
 

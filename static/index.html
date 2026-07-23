@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OVOS Messagebus Monitor</title>
-  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-okaidia.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%F0%9F%9A%8C%3C/text%3E%3C/svg%3E">
+<title>OVOS Messagebus Monitor</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body { font-family: Arial, sans-serif; background: #222; color: #fff; padding: 1em; margin: 0; }
@@ -70,6 +69,13 @@
     .msg-details { display: none; padding-top: 0.8rem; }
     .msg-section { margin-top: 0.8rem; }
     .msg-section pre { margin-top: 0.5rem; padding: 10px; background: #444; border-radius: 5px; color: #f8f8f2; overflow: auto; }
+    /* Minimal vendored JSON highlighter — no CDN, works fully offline. */
+    .jh-key    { color: #66d9ef; }
+    .jh-string { color: #a6e22e; }
+    .jh-number { color: #ae81ff; }
+    .jh-bool   { color: #fd971f; }
+    .jh-null   { color: #f92672; }
+    .jh-punct  { color: #ccc; }
     .msg-section button {
       margin-top: 0.3rem; padding: 0.3rem 0.6rem; font-size: 0.85em;
       background-color: #444; color: #fff; border: 1px solid #666; border-radius: 4px; cursor: pointer;
@@ -77,6 +83,66 @@
     .msg-section button:hover { background-color: #555; }
 
     .status-bar { font-size: 0.8rem; color: #888; text-align: right; margin-bottom: 4px; }
+
+    /* Chat panel */
+    .layout { display: flex; gap: 1rem; align-items: flex-start; }
+    .layout .container { flex: 1 1 auto; min-width: 0; }
+    .chat-panel {
+      flex: 0 0 320px; max-width: 320px; display: none;
+      background: #2a2a2a; border: 1px solid #555; border-radius: 8px;
+      padding: 0.8rem; position: sticky; top: 0.5rem;
+    }
+    .chat-panel.open { display: flex; flex-direction: column; }
+    .chat-panel h2 { margin: 0 0 0.5rem 0; font-size: 1rem; color: #f44336; }
+    .chat-hint { font-size: 0.75rem; color: #888; margin-bottom: 0.5rem; }
+    .chat-log {
+      flex: 1 1 auto; min-height: 200px; max-height: 60vh; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.5rem;
+    }
+    .chat-bubble {
+      padding: 0.5rem 0.7rem; border-radius: 10px; font-size: 0.88rem; max-width: 90%;
+      word-wrap: break-word; white-space: pre-wrap;
+    }
+    .chat-bubble.me    { align-self: flex-end;   background: #f44336; color: #fff; }
+    .chat-bubble.assistant { align-self: flex-start; background: #444; color: #eee; }
+    .chat-bubble.error { align-self: flex-start; background: #5a1010; color: #f88; }
+    .chat-input-row { display: flex; gap: 0.4rem; }
+    .chat-input-row input {
+      flex: 1 1 auto; background: #444; color: #fff; border: 1px solid #666;
+      border-radius: 4px; padding: 6px 10px; font-size: 0.9em;
+    }
+    .chat-session-id { font-family: monospace; font-size: 0.7rem; color: #666; margin-top: 0.4rem; }
+
+    /* Timeline view */
+    .trace {
+      border: 1px solid #555; border-radius: 8px; margin-bottom: 0.8rem; background: #2c2c2c;
+    }
+    .trace > summary {
+      cursor: pointer; padding: 0.7rem 0.9rem; list-style: none;
+      display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
+    }
+    .trace > summary::-webkit-details-marker { display: none; }
+    .trace > summary::before { content: '▶'; color: #888; font-size: 0.75em; }
+    .trace[open] > summary::before { content: '▼'; }
+    .trace-session { color: #f44336; font-weight: bold; font-family: monospace; }
+    .trace-summary { color: #ccc; flex: 1 1 auto; }
+    .trace-count { color: #888; font-size: 0.8em; }
+    .trace-body { padding: 0 0.9rem 0.7rem 0.9rem; }
+    .trace-step {
+      display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.35rem 0;
+      border-top: 1px solid #3a3a3a;
+    }
+    .trace-step:first-child { border-top: none; }
+    .badge {
+      display: inline-block; min-width: 70px; text-align: center; font-size: 0.7rem;
+      font-weight: bold; padding: 2px 6px; border-radius: 10px; color: #fff; flex-shrink: 0;
+    }
+    .badge.utterance { background: #2e7d32; }
+    .badge.pipeline   { background: #1565c0; }
+    .badge.skill      { background: #6a1b9a; }
+    .badge.output     { background: #ef6c00; }
+    .badge.other      { background: #555; }
+    .trace-step .msg { flex: 1 1 auto; margin-bottom: 0; }
     footer { margin-top: 1rem; background-color: #222; padding: 1rem; border-radius: 8px; text-align: center; }
     footer p { color: #fff; margin: 0; }
   </style>
@@ -85,7 +151,7 @@
 
 <header class="header">
   <div style="display:flex;align-items:center;gap:0.6rem;">
-    <img src="https://www.openvoiceos.org/_next/static/media/logo.02220a9b.png" alt="OVOS Logo">
+    <img src="data:image/png;base64,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" alt="OVOS Logo">
     <h1>OpenVoiceOS Messagebus Monitor
       <span id="transport-badge" class="transport-badge">connecting…</span>
     </h1>
@@ -116,11 +182,23 @@
     </select>
   </div>
   <div>
+    <button class="btn" id="view-btn" onclick="toggleView()">🗂 Timeline view</button>
+    <button class="btn" id="chat-btn" onclick="toggleChat()">💬 Chat</button>
     <button class="btn" id="pause-btn" onclick="togglePause()">⏸ Pause</button>
     <button class="btn" onclick="clearBuffer()">🗑 Clear</button>
     <button class="btn" onclick="exportJSONL()">⬇ Export JSONL</button>
     <button class="btn" onclick="exportJSON()">⬇ Export JSON</button>
     <button class="btn" onclick="downloadStandalone()" title="Save this page as a local HTML file — use it when the browser blocks ws:// connections from https pages">⬇ Standalone HTML</button>
+  </div>
+  <div class="row" style="margin-top:0.4rem;">
+    <label style="color:#aaa;font-size:0.85rem;align-self:center;">
+      Buffer size:
+      <input type="number" id="buffer-size" class="input" value="5000" min="100" step="100"
+             style="width:100px;flex:none;display:inline-block;" title="Max messages kept client-side; oldest are dropped">
+    </label>
+    <label style="color:#aaa;font-size:0.85rem;align-self:center;">
+      <input type="checkbox" id="pause-on-match"> Pause on filter match
+    </label>
   </div>
 </div>
 
@@ -132,14 +210,34 @@
     <label style="color:#aaa;font-size:0.85rem;align-self:center;">Payload JSON (data):</label>
   </div>
   <textarea id="inject-payload">{}</textarea>
+  <div class="row" style="margin-top:0.5rem;">
+    <label style="color:#aaa;font-size:0.85rem;align-self:center;">Context JSON (optional):</label>
+  </div>
+  <textarea id="inject-context">{}</textarea>
   <div>
     <button class="btn danger" onclick="injectMessage()">⚡ Send message</button>
     <span id="inject-status" class="inject-status"></span>
   </div>
 </details>
 
-<div class="status-bar" id="status-bar">No messages yet.</div>
-<div class="container"><div id="log"></div></div>
+<div class="layout">
+  <div class="container">
+    <div class="status-bar" id="status-bar">No messages yet.</div>
+    <div id="log"></div>
+  </div>
+
+  <!-- Chat panel: converse with the assistant over one stable Session. -->
+  <div class="chat-panel" id="chat-panel">
+    <h2>💬 Chat</h2>
+    <div class="chat-hint">Requires service mode (SSE) — sends via the authenticated <code>/api/chat</code> endpoint.</div>
+    <div class="chat-log" id="chat-log"></div>
+    <div class="chat-input-row">
+      <input type="text" id="chat-input" placeholder="Type a message…" autocomplete="off">
+      <button class="btn" onclick="sendChat()">Send</button>
+    </div>
+    <div class="chat-session-id">session: <span id="chat-session-id-label"></span></div>
+  </div>
+</div>
 
 <footer>
   <p>&copy; 2025 TigreGóticoLda.</p>
@@ -148,10 +246,48 @@
 
 <script>
 // ─── State ────────────────────────────────────────────────────────────────────
-const MAX_BUFFER = 2000;
+const DEFAULT_MAX_BUFFER = 5000;
 let messages = [];
 let paused = false;
 let nextId = 0;
+let viewMode = 'flat'; // 'flat' | 'timeline'
+let droppedCount = 0;
+
+// Tiny vendored JSON syntax highlighter (regex tokenizer over
+// JSON.stringify output) — replaces the Prism.js CDN dependency so the UI
+// works fully offline. highlightAllJSON() is a no-op kept for readability
+// at call sites: highlighting happens inline while building each <pre> via
+// highlightJSON(), not as a DOM post-pass.
+function highlightAllJSON() { /* no-op: highlighting is applied inline */ }
+
+function highlightJSON(obj) {
+  const json = JSON.stringify(obj, null, 2);
+  // Tokenize the RAW json first (quotes intact), then HTML-escape each
+  // piece individually — safe against '<'/'>'/'&' inside string values.
+  const tokenRe = /("(?:\\.|[^"\\])*"(\s*:)?|\b(?:true|false)\b|\bnull\b|-?\d+\.?\d*(?:[eE][+-]?\d+)?)/g;
+  let out = '';
+  let last = 0;
+  let m;
+  while ((m = tokenRe.exec(json)) !== null) {
+    out += esc(json.slice(last, m.index));
+    const match = m[0];
+    const isKey = !!m[2];
+    let cls = 'jh-number';
+    if (isKey) cls = 'jh-key';
+    else if (match.startsWith('"')) cls = 'jh-string';
+    else if (match === 'true' || match === 'false') cls = 'jh-bool';
+    else if (match === 'null') cls = 'jh-null';
+    out += `<span class="${cls}">${esc(match)}</span>`;
+    last = tokenRe.lastIndex;
+  }
+  out += esc(json.slice(last));
+  return out;
+}
+
+function maxBuffer() {
+  const v = parseInt(document.getElementById('buffer-size').value, 10);
+  return (Number.isFinite(v) && v > 0) ? v : DEFAULT_MAX_BUFFER;
+}
 
 // ─── Transport abstraction ────────────────────────────────────────────────────
 /**
@@ -285,19 +421,24 @@ function normaliseBusFrame(raw) {
 async function injectMessage() {
   const msgType = document.getElementById('inject-type').value.trim();
   const payloadStr = document.getElementById('inject-payload').value.trim();
+  const contextStr = document.getElementById('inject-context').value.trim();
   const status = document.getElementById('inject-status');
   if (!msgType) { status.textContent = '✗ message type is required'; status.style.color='#f44'; return; }
 
-  let payload;
+  let payload, context;
   try { payload = JSON.parse(payloadStr || '{}'); }
-  catch(e) { status.textContent = '✗ invalid JSON: ' + e.message; status.style.color='#f44'; return; }
+  catch(e) { status.textContent = '✗ invalid data JSON: ' + e.message; status.style.color='#f44'; return; }
+  try { context = JSON.parse(contextStr || '{}'); }
+  catch(e) { status.textContent = '✗ invalid context JSON: ' + e.message; status.style.color='#f44'; return; }
 
   if (transportMode === 'sse') {
-    // Mode 2 — POST to API
+    // Mode 2 — POST to API. The service's own bus listener rebroadcasts
+    // whatever it emits, so the sent message reappears in the live stream
+    // like any other — no special-casing needed here.
     const resp = await fetch('api/send', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({type: msgType, data: payload}),
+      body: JSON.stringify({type: msgType, data: payload, context: context}),
     });
     if (resp.ok) { status.textContent = '✓ sent'; status.style.color='#4f4'; }
     else { status.textContent = '✗ ' + await resp.text(); status.style.color='#f44'; }
@@ -306,7 +447,7 @@ async function injectMessage() {
     if (!_ws || _ws.readyState !== WebSocket.OPEN) {
       status.textContent = '✗ WebSocket not connected'; status.style.color='#f44'; return;
     }
-    _ws.send(JSON.stringify({type: msgType, data: payload, context: {}}));
+    _ws.send(JSON.stringify({type: msgType, data: payload, context: context}));
     status.textContent = '✓ sent'; status.style.color='#4f4';
   }
   setTimeout(() => status.textContent = '', 3000);
@@ -342,33 +483,95 @@ function filteredMessages() {
   );
 }
 
-function render() {
-  const log  = document.getElementById('log');
-  const sort = document.getElementById('sort').value;
-  const msgs = filteredMessages();
-  const ordered = sort === 'asc' ? [...msgs] : [...msgs].reverse();
+// ─── Timeline grouping (Feature: utterance timeline view) ─────────────────────
+// Pure client-side clustering over the existing flat stream — no server
+// changes needed. One "trace" == one session id (falling back to the
+// utterance-correlation id found in context when present), so one
+// interaction (utterance → pipeline/intent → skill handler → speak/audio)
+// renders as a single collapsible group.
 
-  document.getElementById('status-bar').textContent =
-    `${messages.length} captured, ${msgs.length} visible`;
+function classifyMessage(msg) {
+  const t = (msg.type || '').toLowerCase();
+  if (t === 'recognizer_loop:utterance') return 'utterance';
+  if (t.includes('speak') || t.includes('audio') || t.includes('tts')) return 'output';
+  if (t.includes('intent') || t.startsWith('ovos.pipeline') || t.includes('padatious') ||
+      t.includes('adapt') || t.includes('common_query')) return 'pipeline';
+  if (t.startsWith('skill') || t.includes('.activate') || t.includes('mycroft.skill') ||
+      t.includes('handler')) return 'skill';
+  return 'other';
+}
 
+function correlationKey(msg) {
+  // Prefer an explicit utterance-correlation id carried in context, then
+  // session id, then bucket everything else together.
+  const ctx = msg.context || {};
+  return ctx.ident || ctx.utterance_id || msg.session || '__ungrouped__';
+}
+
+function groupIntoTraces(msgs) {
+  const order = [];
+  const groups = new Map();
+  for (const m of msgs) {
+    const key = correlationKey(m);
+    if (!groups.has(key)) { groups.set(key, []); order.push(key); }
+    groups.get(key).push(m);
+  }
+  return order.map(key => {
+    const group = groups.get(key);
+    const first = group[0];
+    const utterance = group.find(m => classifyMessage(m) === 'utterance');
+    let summary;
+    if (key === '__ungrouped__') summary = '(no session) — misc traffic';
+    else if (utterance) summary = (utterance.data && utterance.data.utterances || [utterance.data && utterance.data.utterance])[0] || first.type;
+    else summary = first.type;
+    return {key, group, summary};
+  });
+}
+
+function renderTimeline(msgs) {
+  const log = document.getElementById('log');
+  const traces = groupIntoTraces(msgs);
   log.innerHTML = '';
-  for (const msg of ordered) {
-    const div = document.createElement('div');
-    div.className = 'msg';
-    const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleString() : '';
+  for (const {key, group, summary} of traces) {
+    const details = document.createElement('details');
+    details.className = 'trace';
+    const first = group[0];
+    const last = group[group.length - 1];
+    details.innerHTML = `
+      <summary>
+        <span class="trace-session">${key === '__ungrouped__' ? 'ungrouped' : esc(key)}</span>
+        <span class="trace-summary">${esc(String(summary))}</span>
+        <span class="trace-count">${group.length} msg${group.length === 1 ? '' : 's'} · ${esc(new Date(first.timestamp).toLocaleTimeString())}–${esc(new Date(last.timestamp).toLocaleTimeString())}</span>
+      </summary>
+      <div class="trace-body"></div>
+    `;
+    const body = details.querySelector('.trace-body');
+    for (const msg of group) {
+      const step = document.createElement('div');
+      step.className = 'trace-step';
+      const cat = classifyMessage(msg);
+      step.innerHTML = `<span class="badge ${cat}">${cat}</span>${renderMsgHtml(msg)}`;
+      body.appendChild(step);
+    }
+    log.appendChild(details);
+  }
+  highlightAllJSON();
+}
 
-    let sections = '';
-    if (Object.keys(msg.data || {}).length) {
-      sections += msgSection(`data-${msg.id}`, 'message.data', msg.data);
-    }
-    if (Object.keys(msg.context || {}).length) {
-      sections += msgSection(`ctx-${msg.id}`, 'message.context', msg.context);
-    }
-    if (Object.keys(msg.session_data || {}).length) {
-      sections += msgSection(`sess-${msg.id}`, 'session', msg.session_data);
-    }
-
-    div.innerHTML = `
+function renderMsgHtml(msg) {
+  const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleString() : '';
+  let sections = '';
+  if (Object.keys(msg.data || {}).length) {
+    sections += msgSection(`data-${msg.id}`, 'message.data', msg.data);
+  }
+  if (Object.keys(msg.context || {}).length) {
+    sections += msgSection(`ctx-${msg.id}`, 'message.context', msg.context);
+  }
+  if (Object.keys(msg.session_data || {}).length) {
+    sections += msgSection(`sess-${msg.id}`, 'session', msg.session_data);
+  }
+  return `
+    <div class="msg">
       <div class="msg-type">${esc(msg.type)}</div>
       <div><span class="label">Timestamp:</span> ${esc(ts)}</div>
       <div>
@@ -377,17 +580,49 @@ function render() {
         ${msg.destination ? `<span class="label">| destination:</span> ${esc(msg.destination)}` : ''}
       </div>
       ${sections}
-    `;
-    log.appendChild(div);
+    </div>
+  `;
+}
+
+function toggleView() {
+  viewMode = viewMode === 'flat' ? 'timeline' : 'flat';
+  const btn = document.getElementById('view-btn');
+  btn.textContent = viewMode === 'timeline' ? '📄 Flat view' : '🗂 Timeline view';
+  btn.classList.toggle('pause-active', viewMode === 'timeline');
+  render();
+}
+
+function render() {
+  const log  = document.getElementById('log');
+  const sort = document.getElementById('sort').value;
+  const msgs = filteredMessages();
+  const ordered = sort === 'asc' ? [...msgs] : [...msgs].reverse();
+
+  document.getElementById('status-bar').textContent =
+    `${messages.length} captured, ${msgs.length} visible` +
+    (droppedCount ? ` (${droppedCount} dropped)` : '') +
+    (paused ? ' — PAUSED' : '');
+
+  if (viewMode === 'timeline') {
+    // Timeline groups read chronologically regardless of the sort toggle.
+    renderTimeline([...msgs]);
+    return;
   }
-  Prism.highlightAll();
+
+  log.innerHTML = '';
+  for (const msg of ordered) {
+    const div = document.createElement('div');
+    div.innerHTML = renderMsgHtml(msg).trim();
+    log.appendChild(div.firstElementChild);
+  }
+  highlightAllJSON();
 }
 
 function msgSection(id, label, obj) {
   return `<div class="msg-section">
     <button onclick="toggleVis('${id}')">▶ ${label}</button>
     <div id="${id}" class="msg-details" style="display:none;">
-      <pre class="language-json">${esc(JSON.stringify(obj, null, 2))}</pre>
+      <pre>${highlightJSON(obj)}</pre>
     </div>
   </div>`;
 }
@@ -403,23 +638,59 @@ function esc(s) {
 }
 
 // ─── Buffer management ────────────────────────────────────────────────────────
+// Bounded ring buffer: capped at maxBuffer() (configurable, default 5000),
+// oldest messages dropped first; dropped count is tracked and shown in the
+// status bar. Pause stops ingestion entirely (manual, or automatically the
+// moment an incoming message matches the active filters).
 function pushMessage(msg) {
+  handleChatReply(msg);
   if (paused) return;
   if (!msg.id) msg.id = ++nextId;
   messages.push(msg);
-  if (messages.length > MAX_BUFFER) messages.splice(0, messages.length - MAX_BUFFER);
+  const cap = maxBuffer();
+  if (messages.length > cap) {
+    const excess = messages.length - cap;
+    messages.splice(0, excess);
+    droppedCount += excess;
+  }
+
+  if (document.getElementById('pause-on-match').checked && matchesCurrentFilters(msg)) {
+    setPaused(true);
+  }
+
   render();
 }
 
-function togglePause() {
-  paused = !paused;
+function matchesCurrentFilters(msg) {
+  const fType   = document.getElementById('filter').value.trim();
+  const fSearch = document.getElementById('search').value.trim();
+  const fSess   = document.getElementById('session_filter').value.trim().toLowerCase();
+  const fSrc    = document.getElementById('source_filter').value.trim().toLowerCase();
+  const fDst    = document.getElementById('dest_filter').value.trim().toLowerCase();
+  // Only auto-pause when at least one filter is actually set — otherwise
+  // "pause on filter match" would fire on every single message.
+  if (!fType && !fSearch && !fSess && !fSrc && !fDst) return false;
+  return globMatch(msg.type, fType) &&
+    matchesSearch(msg, fSearch) &&
+    (!fSess || String(msg.session||'').toLowerCase().includes(fSess)) &&
+    (!fSrc  || String(msg.source||'').toLowerCase().includes(fSrc)) &&
+    (!fDst  || String(msg.destination||'').toLowerCase().includes(fDst));
+}
+
+function setPaused(value) {
+  paused = value;
   const btn = document.getElementById('pause-btn');
   btn.textContent = paused ? '▶ Resume' : '⏸ Pause';
   btn.classList.toggle('pause-active', paused);
 }
 
+function togglePause() {
+  setPaused(!paused);
+}
+
 function clearBuffer() {
   messages = [];
+  droppedCount = 0;
   render();
 }
 
@@ -456,6 +727,85 @@ async function downloadStandalone() {
     download(html, 'ovos-busmon.html', 'text/html');
   } catch (e) {
     download(document.documentElement.outerHTML, 'ovos-busmon.html', 'text/html');
+  }
+}
+
+// ─── Chat panel ───────────────────────────────────────────────────────────────
+// One stable Session per browser tab (persisted in sessionStorage so a
+// reload keeps the same conversation), reused for every turn so
+// converse/multi-turn context on the OVOS side works. Never "default".
+function getChatSessionId() {
+  const KEY = 'busmon-chat-session-id';
+  let id = sessionStorage.getItem(KEY);
+  if (!id) {
+    id = 'busmon-chat-' + (crypto.randomUUID ? crypto.randomUUID() : (Date.now() + '-' + Math.random().toString(16).slice(2)));
+    sessionStorage.setItem(KEY, id);
+  }
+  return id;
+}
+
+const chatSessionId = getChatSessionId();
+document.getElementById('chat-session-id-label').textContent = chatSessionId;
+
+let chatOpen = false;
+
+function toggleChat() {
+  chatOpen = !chatOpen;
+  const panel = document.getElementById('chat-panel');
+  const btn = document.getElementById('chat-btn');
+  panel.classList.toggle('open', chatOpen);
+  btn.classList.toggle('pause-active', chatOpen);
+  if (chatOpen) document.getElementById('chat-input').focus();
+}
+
+function appendChatBubble(kind, text) {
+  const log = document.getElementById('chat-log');
+  const div = document.createElement('div');
+  div.className = 'chat-bubble ' + kind;
+  div.textContent = text;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  if (transportMode !== 'sse') {
+    appendChatBubble('error', 'Chat requires service (SSE) mode — this page is in direct WebSocket mode.');
+    return;
+  }
+  appendChatBubble('me', text);
+  input.value = '';
+  try {
+    const resp = await fetch('api/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({utterance: text, lang: 'en-us', session_id: chatSessionId}),
+    });
+    if (!resp.ok) {
+      appendChatBubble('error', 'Send failed: ' + await resp.text());
+    }
+  } catch (e) {
+    appendChatBubble('error', 'Send failed: ' + e.message);
+  }
+}
+
+document.getElementById('chat-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') sendChat();
+});
+
+// Render only the two reply shapes the chat panel understands, and only
+// when they belong to *this* browser session — every other bus message
+// keeps flowing through the normal log/timeline unaffected.
+function handleChatReply(msg) {
+  if (msg.session !== chatSessionId) return;
+  const t = (msg.type || '').toLowerCase();
+  if (t === 'ovos.utterance.speak' || t === 'speak') {
+    const utt = (msg.data && msg.data.utterance) || '';
+    if (utt) appendChatBubble('assistant', utt);
+  } else if (t === 'complete_intent_failure') {
+    appendChatBubble('error', 'No response (complete_intent_failure)');
   }
 }
 
