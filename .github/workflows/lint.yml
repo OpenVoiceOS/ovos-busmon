@@ -8,9 +8,6 @@ on:
 jobs:
   lint:
     uses: OpenVoiceOS/gh-automations/.github/workflows/lint.yml@82252c363b239fe5c60dc0ae2a4e81721d4cabef
-    secrets:
-      PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
-      MATRIX_TOKEN: ${{ secrets.MATRIX_TOKEN }}
     with:
       ruff: true
       pre_commit: false   # set true if .pre-commit-config.yaml exists
