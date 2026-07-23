@@ -3,8 +3,6 @@
 Live monitor, capture, and injection tool for the [OpenVoiceOS](https://openvoiceos.org) messagebus.
 Stream every bus message to a browser, filter by type (glob), inspect payloads, export captures as JSONL, and inject messages directly from the UI.
 
-![screenrecording](demo.gif)
-
 ![timeline view tracing one interaction](docs/img/timeline-view.png)
 
 See [docs/usage.md](docs/usage.md) for a full walkthrough with screenshots.
