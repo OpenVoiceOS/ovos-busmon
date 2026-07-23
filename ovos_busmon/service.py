@@ -22,6 +22,70 @@ from ovos_busmon.version import __version__
 
 load_dotenv()
 
+# ─── Bus client compatibility shim ─────────────────────────────────────────────
+# ovos_bus_client.client.AsyncMessageBusClient only exists in unmerged
+# ovos-bus-client PR #200. Every published release only ships the threaded/sync
+# MessageBusClient, so importing AsyncMessageBusClient unconditionally makes
+# every real install of this package crash with an ImportError. Prefer the
+# async client when it is available (nothing else needs to change once
+# PR #200 merges and ships) and otherwise bridge the sync client onto the
+# asyncio event loop.
+try:
+    from ovos_bus_client.client import AsyncMessageBusClient  # noqa: F401
+    _HAS_ASYNC_BUS_CLIENT = True
+except ImportError:
+    AsyncMessageBusClient = None  # type: ignore[assignment]
+    _HAS_ASYNC_BUS_CLIENT = False
+
+
+class _ThreadedBusClientAdapter:
+    """Adapts the synchronous/threaded ``MessageBusClient`` to the small async
+    surface this module needs (``connect``/``close``/``on``/``remove``/``emit``),
+    matching ``AsyncMessageBusClient`` closely enough that call sites don't need
+    to know which one they got. The real client runs its blocking websocket
+    loop in a background thread; callbacks registered via ``on`` are bounced
+    back onto the asyncio event loop with ``call_soon_threadsafe`` so they run
+    on the loop like the native async client's callbacks would.
+    """
+
+    def __init__(self, host: str, port: int):
+        from ovos_bus_client.client import MessageBusClient
+
+        self._bus = MessageBusClient(host=host, port=port)
+        self._loop = asyncio.get_event_loop()
+        self._bridged: dict = {}
+
+    def on(self, event: str, cb) -> None:
+        def _bridge(raw=None):
+            self._loop.call_soon_threadsafe(cb, raw)
+
+        self._bridged[cb] = _bridge
+        self._bus.on(event, _bridge)
+
+    def remove(self, event: str, cb) -> None:
+        bridged = self._bridged.pop(cb, None)
+        if bridged is not None:
+            self._bus.remove(event, bridged)
+
+    async def connect(self) -> None:
+        self._bus.run_in_thread()
+        await self._loop.run_in_executor(
+            None, lambda: self._bus.connected_event.wait(timeout=5)
+        )
+
+    async def close(self) -> None:
+        await self._loop.run_in_executor(None, self._bus.close)
+
+    async def emit(self, message) -> None:
+        await self._loop.run_in_executor(None, self._bus.emit, message)
+
+
+def _make_bus(host: str, port: int):
+    """Return the preferred bus client for this ovos-bus-client install."""
+    if _HAS_ASYNC_BUS_CLIENT:
+        return AsyncMessageBusClient(host=host, port=port)
+    return _ThreadedBusClientAdapter(host=host, port=port)
+
 OVOS_BUS_HOST = os.getenv("OVOS_BUS_HOST", "localhost")
 OVOS_BUS_PORT = int(os.getenv("OVOS_BUS_PORT", "8181"))
 BUFFER_SIZE = int(os.getenv("BUFFER_SIZE", "2000"))
@@ -53,10 +117,9 @@ async def _broadcast_to_sse(payload: dict) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from ovos_bus_client import Message
-    from ovos_bus_client.client import AsyncMessageBusClient
     from ovos_bus_client.session import SessionManager
 
-    bus = AsyncMessageBusClient(host=OVOS_BUS_HOST, port=OVOS_BUS_PORT)
+    bus = _make_bus(OVOS_BUS_HOST, OVOS_BUS_PORT)
 
     def _on_raw(raw: str) -> None:
         try:
@@ -199,9 +262,8 @@ async def api_export(_: str = Depends(_verify)):
 async def api_send(req: SendRequest, _: str = Depends(_verify)):
     try:
         from ovos_bus_client import Message
-        from ovos_bus_client.client import AsyncMessageBusClient
 
-        bus = AsyncMessageBusClient(host=OVOS_BUS_HOST, port=OVOS_BUS_PORT)
+        bus = _make_bus(OVOS_BUS_HOST, OVOS_BUS_PORT)
         await bus.connect()
         await bus.emit(Message(req.type, req.data, req.context))
         await bus.close()
