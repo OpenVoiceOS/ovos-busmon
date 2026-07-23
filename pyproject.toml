@@ -36,8 +36,8 @@ dev = [
 ovos-busmon = "ovos_busmon.service:main"
 
 [project.urls]
-Homepage = "https://github.com/TigreGotico/ovos-busmon"
-"Bug Tracker" = "https://github.com/TigreGotico/ovos-busmon/issues"
+Homepage = "https://github.com/OpenVoiceOS/ovos-busmon"
+"Bug Tracker" = "https://github.com/OpenVoiceOS/ovos-busmon/issues"
 
 [tool.setuptools.dynamic]
 version = { attr = "ovos_busmon.version.__version__" }
