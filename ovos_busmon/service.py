@@ -294,7 +294,6 @@ async def api_chat(req: ChatRequest, _: str = Depends(_verify)):
 
     try:
         from ovos_bus_client import Message
-        from ovos_bus_client.client import AsyncMessageBusClient
         from ovos_bus_client.session import Session
 
         sess = Session(session_id=req.session_id, lang=req.lang)
@@ -305,7 +304,7 @@ async def api_chat(req: ChatRequest, _: str = Depends(_verify)):
             context,
         )
 
-        bus = AsyncMessageBusClient(host=OVOS_BUS_HOST, port=OVOS_BUS_PORT)
+        bus = _make_bus(OVOS_BUS_HOST, OVOS_BUS_PORT)
         await bus.connect()
         await bus.emit(msg)
         await bus.close()

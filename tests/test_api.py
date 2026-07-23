@@ -203,7 +203,7 @@ async def test_chat_payload_shape(client):
             captured["data"] = msg.data
             captured["context"] = msg.context
 
-    with patch("ovos_bus_client.client.AsyncMessageBusClient", _RecordingBus):
+    with patch.object(svc, "_make_bus", lambda h, p: _RecordingBus()):
         r = await client.post(
             "/api/chat",
             json={"utterance": "what time is it", "lang": "en-us", "session_id": "chat-abc123"},
