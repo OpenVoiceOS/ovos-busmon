@@ -154,6 +154,16 @@
     <button class="btn" onclick="exportJSON()">⬇ Export JSON</button>
     <button class="btn" onclick="downloadStandalone()" title="Save this page as a local HTML file — use it when the browser blocks ws:// connections from https pages">⬇ Standalone HTML</button>
   </div>
+  <div class="row" style="margin-top:0.4rem;">
+    <label style="color:#aaa;font-size:0.85rem;align-self:center;">
+      Buffer size:
+      <input type="number" id="buffer-size" class="input" value="5000" min="100" step="100"
+             style="width:100px;flex:none;display:inline-block;" title="Max messages kept client-side; oldest are dropped">
+    </label>
+    <label style="color:#aaa;font-size:0.85rem;align-self:center;">
+      <input type="checkbox" id="pause-on-match"> Pause on filter match
+    </label>
+  </div>
 </div>
 
 <!-- Inject panel -->
@@ -184,7 +194,7 @@
 
 <script>
 // ─── State ────────────────────────────────────────────────────────────────────
-const MAX_BUFFER = 2000;
+const DEFAULT_MAX_BUFFER = 5000;
 let messages = [];
 let paused = false;
 let nextId = 0;
@@ -192,6 +202,11 @@ let viewMode = 'flat'; // 'flat' | 'timeline'
 let droppedCount = 0;
 
 function highlightAllJSON() { Prism.highlightAll(); }
+
+function maxBuffer() {
+  const v = parseInt(document.getElementById('buffer-size').value, 10);
+  return (Number.isFinite(v) && v > 0) ? v : DEFAULT_MAX_BUFFER;
+}
 
 // ─── Transport abstraction ────────────────────────────────────────────────────
 /**
@@ -542,23 +557,58 @@ function esc(s) {
 }
 
 // ─── Buffer management ────────────────────────────────────────────────────────
+// Bounded ring buffer: capped at maxBuffer() (configurable, default 5000),
+// oldest messages dropped first; dropped count is tracked and shown in the
+// status bar. Pause stops ingestion entirely (manual, or automatically the
+// moment an incoming message matches the active filters).
 function pushMessage(msg) {
   if (paused) return;
   if (!msg.id) msg.id = ++nextId;
   messages.push(msg);
-  if (messages.length > MAX_BUFFER) messages.splice(0, messages.length - MAX_BUFFER);
+  const cap = maxBuffer();
+  if (messages.length > cap) {
+    const excess = messages.length - cap;
+    messages.splice(0, excess);
+    droppedCount += excess;
+  }
+
+  if (document.getElementById('pause-on-match').checked && matchesCurrentFilters(msg)) {
+    setPaused(true);
+  }
+
   render();
 }
 
-function togglePause() {
-  paused = !paused;
+function matchesCurrentFilters(msg) {
+  const fType   = document.getElementById('filter').value.trim();
+  const fSearch = document.getElementById('search').value.trim();
+  const fSess   = document.getElementById('session_filter').value.trim().toLowerCase();
+  const fSrc    = document.getElementById('source_filter').value.trim().toLowerCase();
+  const fDst    = document.getElementById('dest_filter').value.trim().toLowerCase();
+  // Only auto-pause when at least one filter is actually set — otherwise
+  // "pause on filter match" would fire on every single message.
+  if (!fType && !fSearch && !fSess && !fSrc && !fDst) return false;
+  return globMatch(msg.type, fType) &&
+    matchesSearch(msg, fSearch) &&
+    (!fSess || String(msg.session||'').toLowerCase().includes(fSess)) &&
+    (!fSrc  || String(msg.source||'').toLowerCase().includes(fSrc)) &&
+    (!fDst  || String(msg.destination||'').toLowerCase().includes(fDst));
+}
+
+function setPaused(value) {
+  paused = value;
   const btn = document.getElementById('pause-btn');
   btn.textContent = paused ? '▶ Resume' : '⏸ Pause';
   btn.classList.toggle('pause-active', paused);
 }
 
+function togglePause() {
+  setPaused(!paused);
+}
+
 function clearBuffer() {
   messages = [];
+  droppedCount = 0;
   render();
 }
 
