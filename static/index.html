@@ -4,8 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OVOS Messagebus Monitor</title>
-  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-okaidia.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body { font-family: Arial, sans-serif; background: #222; color: #fff; padding: 1em; margin: 0; }
@@ -70,6 +68,13 @@
     .msg-details { display: none; padding-top: 0.8rem; }
     .msg-section { margin-top: 0.8rem; }
     .msg-section pre { margin-top: 0.5rem; padding: 10px; background: #444; border-radius: 5px; color: #f8f8f2; overflow: auto; }
+    /* Minimal vendored JSON highlighter — no CDN, works fully offline. */
+    .jh-key    { color: #66d9ef; }
+    .jh-string { color: #a6e22e; }
+    .jh-number { color: #ae81ff; }
+    .jh-bool   { color: #fd971f; }
+    .jh-null   { color: #f92672; }
+    .jh-punct  { color: #ccc; }
     .msg-section button {
       margin-top: 0.3rem; padding: 0.3rem 0.6rem; font-size: 0.85em;
       background-color: #444; color: #fff; border: 1px solid #666; border-radius: 4px; cursor: pointer;
@@ -201,7 +206,36 @@ let nextId = 0;
 let viewMode = 'flat'; // 'flat' | 'timeline'
 let droppedCount = 0;
 
-function highlightAllJSON() { Prism.highlightAll(); }
+// Tiny vendored JSON syntax highlighter (regex tokenizer over
+// JSON.stringify output) — replaces the Prism.js CDN dependency so the UI
+// works fully offline. highlightAllJSON() is a no-op kept for readability
+// at call sites: highlighting happens inline while building each <pre> via
+// highlightJSON(), not as a DOM post-pass.
+function highlightAllJSON() { /* no-op: highlighting is applied inline */ }
+
+function highlightJSON(obj) {
+  const json = JSON.stringify(obj, null, 2);
+  // Tokenize the RAW json first (quotes intact), then HTML-escape each
+  // piece individually — safe against '<'/'>'/'&' inside string values.
+  const tokenRe = /("(?:\\.|[^"\\])*"(\s*:)?|\b(?:true|false)\b|\bnull\b|-?\d+\.?\d*(?:[eE][+-]?\d+)?)/g;
+  let out = '';
+  let last = 0;
+  let m;
+  while ((m = tokenRe.exec(json)) !== null) {
+    out += esc(json.slice(last, m.index));
+    const match = m[0];
+    const isKey = !!m[2];
+    let cls = 'jh-number';
+    if (isKey) cls = 'jh-key';
+    else if (match.startsWith('"')) cls = 'jh-string';
+    else if (match === 'true' || match === 'false') cls = 'jh-bool';
+    else if (match === 'null') cls = 'jh-null';
+    out += `<span class="${cls}">${esc(match)}</span>`;
+    last = tokenRe.lastIndex;
+  }
+  out += esc(json.slice(last));
+  return out;
+}
 
 function maxBuffer() {
   const v = parseInt(document.getElementById('buffer-size').value, 10);
@@ -541,7 +575,7 @@ function msgSection(id, label, obj) {
   return `<div class="msg-section">
     <button onclick="toggleVis('${id}')">▶ ${label}</button>
     <div id="${id}" class="msg-details" style="display:none;">
-      <pre class="language-json">${esc(JSON.stringify(obj, null, 2))}</pre>
+      <pre>${highlightJSON(obj)}</pre>
     </div>
   </div>`;
 }
