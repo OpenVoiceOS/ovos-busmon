@@ -77,6 +77,37 @@
     .msg-section button:hover { background-color: #555; }
 
     .status-bar { font-size: 0.8rem; color: #888; text-align: right; margin-bottom: 4px; }
+
+    /* Timeline view */
+    .trace {
+      border: 1px solid #555; border-radius: 8px; margin-bottom: 0.8rem; background: #2c2c2c;
+    }
+    .trace > summary {
+      cursor: pointer; padding: 0.7rem 0.9rem; list-style: none;
+      display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
+    }
+    .trace > summary::-webkit-details-marker { display: none; }
+    .trace > summary::before { content: '▶'; color: #888; font-size: 0.75em; }
+    .trace[open] > summary::before { content: '▼'; }
+    .trace-session { color: #f44336; font-weight: bold; font-family: monospace; }
+    .trace-summary { color: #ccc; flex: 1 1 auto; }
+    .trace-count { color: #888; font-size: 0.8em; }
+    .trace-body { padding: 0 0.9rem 0.7rem 0.9rem; }
+    .trace-step {
+      display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.35rem 0;
+      border-top: 1px solid #3a3a3a;
+    }
+    .trace-step:first-child { border-top: none; }
+    .badge {
+      display: inline-block; min-width: 70px; text-align: center; font-size: 0.7rem;
+      font-weight: bold; padding: 2px 6px; border-radius: 10px; color: #fff; flex-shrink: 0;
+    }
+    .badge.utterance { background: #2e7d32; }
+    .badge.pipeline   { background: #1565c0; }
+    .badge.skill      { background: #6a1b9a; }
+    .badge.output     { background: #ef6c00; }
+    .badge.other      { background: #555; }
+    .trace-step .msg { flex: 1 1 auto; margin-bottom: 0; }
     footer { margin-top: 1rem; background-color: #222; padding: 1rem; border-radius: 8px; text-align: center; }
     footer p { color: #fff; margin: 0; }
   </style>
@@ -116,6 +147,7 @@
     </select>
   </div>
   <div>
+    <button class="btn" id="view-btn" onclick="toggleView()">🗂 Timeline view</button>
     <button class="btn" id="pause-btn" onclick="togglePause()">⏸ Pause</button>
     <button class="btn" onclick="clearBuffer()">🗑 Clear</button>
     <button class="btn" onclick="exportJSONL()">⬇ Export JSONL</button>
@@ -156,6 +188,10 @@ const MAX_BUFFER = 2000;
 let messages = [];
 let paused = false;
 let nextId = 0;
+let viewMode = 'flat'; // 'flat' | 'timeline'
+let droppedCount = 0;
+
+function highlightAllJSON() { Prism.highlightAll(); }
 
 // ─── Transport abstraction ────────────────────────────────────────────────────
 /**
@@ -351,33 +387,95 @@ function filteredMessages() {
   );
 }
 
-function render() {
-  const log  = document.getElementById('log');
-  const sort = document.getElementById('sort').value;
-  const msgs = filteredMessages();
-  const ordered = sort === 'asc' ? [...msgs] : [...msgs].reverse();
+// ─── Timeline grouping (Feature: utterance timeline view) ─────────────────────
+// Pure client-side clustering over the existing flat stream — no server
+// changes needed. One "trace" == one session id (falling back to the
+// utterance-correlation id found in context when present), so one
+// interaction (utterance → pipeline/intent → skill handler → speak/audio)
+// renders as a single collapsible group.
 
-  document.getElementById('status-bar').textContent =
-    `${messages.length} captured, ${msgs.length} visible`;
+function classifyMessage(msg) {
+  const t = (msg.type || '').toLowerCase();
+  if (t === 'recognizer_loop:utterance') return 'utterance';
+  if (t.includes('speak') || t.includes('audio') || t.includes('tts')) return 'output';
+  if (t.includes('intent') || t.startsWith('ovos.pipeline') || t.includes('padatious') ||
+      t.includes('adapt') || t.includes('common_query')) return 'pipeline';
+  if (t.startsWith('skill') || t.includes('.activate') || t.includes('mycroft.skill') ||
+      t.includes('handler')) return 'skill';
+  return 'other';
+}
 
+function correlationKey(msg) {
+  // Prefer an explicit utterance-correlation id carried in context, then
+  // session id, then bucket everything else together.
+  const ctx = msg.context || {};
+  return ctx.ident || ctx.utterance_id || msg.session || '__ungrouped__';
+}
+
+function groupIntoTraces(msgs) {
+  const order = [];
+  const groups = new Map();
+  for (const m of msgs) {
+    const key = correlationKey(m);
+    if (!groups.has(key)) { groups.set(key, []); order.push(key); }
+    groups.get(key).push(m);
+  }
+  return order.map(key => {
+    const group = groups.get(key);
+    const first = group[0];
+    const utterance = group.find(m => classifyMessage(m) === 'utterance');
+    let summary;
+    if (key === '__ungrouped__') summary = '(no session) — misc traffic';
+    else if (utterance) summary = (utterance.data && utterance.data.utterances || [utterance.data && utterance.data.utterance])[0] || first.type;
+    else summary = first.type;
+    return {key, group, summary};
+  });
+}
+
+function renderTimeline(msgs) {
+  const log = document.getElementById('log');
+  const traces = groupIntoTraces(msgs);
   log.innerHTML = '';
-  for (const msg of ordered) {
-    const div = document.createElement('div');
-    div.className = 'msg';
-    const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleString() : '';
+  for (const {key, group, summary} of traces) {
+    const details = document.createElement('details');
+    details.className = 'trace';
+    const first = group[0];
+    const last = group[group.length - 1];
+    details.innerHTML = `
+      <summary>
+        <span class="trace-session">${key === '__ungrouped__' ? 'ungrouped' : esc(key)}</span>
+        <span class="trace-summary">${esc(String(summary))}</span>
+        <span class="trace-count">${group.length} msg${group.length === 1 ? '' : 's'} · ${esc(new Date(first.timestamp).toLocaleTimeString())}–${esc(new Date(last.timestamp).toLocaleTimeString())}</span>
+      </summary>
+      <div class="trace-body"></div>
+    `;
+    const body = details.querySelector('.trace-body');
+    for (const msg of group) {
+      const step = document.createElement('div');
+      step.className = 'trace-step';
+      const cat = classifyMessage(msg);
+      step.innerHTML = `<span class="badge ${cat}">${cat}</span>${renderMsgHtml(msg)}`;
+      body.appendChild(step);
+    }
+    log.appendChild(details);
+  }
+  highlightAllJSON();
+}
 
-    let sections = '';
-    if (Object.keys(msg.data || {}).length) {
-      sections += msgSection(`data-${msg.id}`, 'message.data', msg.data);
-    }
-    if (Object.keys(msg.context || {}).length) {
-      sections += msgSection(`ctx-${msg.id}`, 'message.context', msg.context);
-    }
-    if (Object.keys(msg.session_data || {}).length) {
-      sections += msgSection(`sess-${msg.id}`, 'session', msg.session_data);
-    }
-
-    div.innerHTML = `
+function renderMsgHtml(msg) {
+  const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleString() : '';
+  let sections = '';
+  if (Object.keys(msg.data || {}).length) {
+    sections += msgSection(`data-${msg.id}`, 'message.data', msg.data);
+  }
+  if (Object.keys(msg.context || {}).length) {
+    sections += msgSection(`ctx-${msg.id}`, 'message.context', msg.context);
+  }
+  if (Object.keys(msg.session_data || {}).length) {
+    sections += msgSection(`sess-${msg.id}`, 'session', msg.session_data);
+  }
+  return `
+    <div class="msg">
       <div class="msg-type">${esc(msg.type)}</div>
       <div><span class="label">Timestamp:</span> ${esc(ts)}</div>
       <div>
@@ -386,10 +484,42 @@ function render() {
         ${msg.destination ? `<span class="label">| destination:</span> ${esc(msg.destination)}` : ''}
       </div>
       ${sections}
-    `;
-    log.appendChild(div);
+    </div>
+  `;
+}
+
+function toggleView() {
+  viewMode = viewMode === 'flat' ? 'timeline' : 'flat';
+  const btn = document.getElementById('view-btn');
+  btn.textContent = viewMode === 'timeline' ? '📄 Flat view' : '🗂 Timeline view';
+  btn.classList.toggle('pause-active', viewMode === 'timeline');
+  render();
+}
+
+function render() {
+  const log  = document.getElementById('log');
+  const sort = document.getElementById('sort').value;
+  const msgs = filteredMessages();
+  const ordered = sort === 'asc' ? [...msgs] : [...msgs].reverse();
+
+  document.getElementById('status-bar').textContent =
+    `${messages.length} captured, ${msgs.length} visible` +
+    (droppedCount ? ` (${droppedCount} dropped)` : '') +
+    (paused ? ' — PAUSED' : '');
+
+  if (viewMode === 'timeline') {
+    // Timeline groups read chronologically regardless of the sort toggle.
+    renderTimeline([...msgs]);
+    return;
   }
-  Prism.highlightAll();
+
+  log.innerHTML = '';
+  for (const msg of ordered) {
+    const div = document.createElement('div');
+    div.innerHTML = renderMsgHtml(msg).trim();
+    log.appendChild(div.firstElementChild);
+  }
+  highlightAllJSON();
 }
 
 function msgSection(id, label, obj) {
