@@ -9,21 +9,21 @@ See [docs/usage.md](docs/usage.md) for a full walkthrough with screenshots.
 
 ## Debug your OVOS device from a URL
 
-The monitor UI is a single static page. Hosted on GitHub Pages, anyone can open
+The monitor UI is a single static page hosted on GitHub Pages. Anyone can open
 the URL on a laptop that can reach an OVOS device and connect to its messagebus
-immediately — no install, no server: the page opens a WebSocket straight to
-`ws://localhost:8181/core` (host/port configurable in the connection panel or
-via `?host=&port=` query parameters).
+right away, with no install and no server. The page opens a WebSocket straight
+to `ws://localhost:8181/core` (host and port are configurable in the
+connection panel or through `?host=&port=` query parameters).
 
-Browser note: Chromium-based browsers allow a `ws://localhost` connection from
-an `https://` page (localhost is a trustworthy origin); Safari and some Firefox
-versions block it. If the connection is refused, use the **Download standalone
-HTML** button in the UI and open the saved file locally — identical
-functionality, no restrictions.
+Chromium-based browsers allow a `ws://localhost` connection from an
+`https://` page, because localhost counts as a trustworthy origin. Safari and
+some versions of Firefox block it. If the connection is refused, use the
+**Download standalone HTML** button in the UI and open the saved file
+locally. This gives the same functionality with no restrictions.
 
-## Two transport modes — one UI
+## Two transport modes, one UI
 
-### Mode 1 — fully in-browser (zero server)
+### Mode 1 - fully in-browser (zero server)
 
 Open `static/index.html` directly (or deploy it to GitHub Pages).
 The page opens a WebSocket **directly to the OVOS messagebus** (`ws://localhost:8181/core` by default).
@@ -36,24 +36,28 @@ file:///path/to/static/index.html?host=192.168.1.10&port=8181&path=/core
 Works whenever the browser can reach the bus (same machine as OVOS, or LAN).
 No server required.
 
-### Mode 2 — service (`ovos-busmon`)
+### Mode 2 - service (`ovos-busmon`)
 
 Install and run the FastAPI service.
-It connects **server-side** to the bus via `ovos-bus-client` and serves:
+It connects server-side to the bus through `ovos-bus-client` and serves these
+endpoints.
 
 | Endpoint | Description |
 |---|---|
 | `GET /` | The same static UI (auto-detected transport: SSE instead of WS) |
 | `GET /api/status` | Service health, buffer stats, bus coordinates |
 | `GET /api/messages` | Ring buffer contents (`?since_id=N&limit=M`) |
+
+| Endpoint | Description |
+|---|---|
 | `GET /api/stream` | SSE live tail |
 | `POST /api/send` | Inject a message onto the bus |
 | `POST /api/chat` | Send a text utterance as a real client would (chat panel) |
 | `GET /api/export` | JSONL download of the full capture buffer |
 
 The UI auto-detects which transport to use:
-- served from `http://` / `https://` → SSE + REST (Mode 2)
-- opened as `file://` or from a static host → direct WebSocket (Mode 1)
+- served from `http://` or `https://`: SSE and REST (Mode 2)
+- opened as `file://` or from a static host: direct WebSocket (Mode 1)
 
 ## Installation
 
@@ -78,13 +82,16 @@ ovos-busmon
 
 ### Configuration
 
-All settings via environment variables (or a `.env` file):
+Set these through environment variables or a `.env` file.
 
 | Variable | Default | Description |
 |---|---|---|
 | `OVOS_BUS_HOST` | `localhost` | OVOS messagebus host |
 | `OVOS_BUS_PORT` | `8181` | OVOS messagebus port |
 | `BUSMON_HOST` | `127.0.0.1` | Address to bind the HTTP service |
+
+| Variable | Default | Description |
+|---|---|---|
 | `BUSMON_PORT` | `8005` | Port to bind the HTTP service |
 | `BUSMON_USERNAME` | `ovos` | HTTP Basic auth username |
 | `BUSMON_PASSWORD` | `ovos` | HTTP Basic auth password |
@@ -101,25 +108,28 @@ To reach an OVOS bus on the host machine, `OVOS_BUS_HOST=host.docker.internal` i
 
 ## Message injection
 
-The **Inject** panel is a power tool.
-It sends arbitrary messages onto the bus — useful for development and testing.
-By default the service binds only to `127.0.0.1`; do not expose it to untrusted networks.
+The **Inject** panel sends arbitrary messages onto the bus. Use it for
+development and testing.
+By default the service binds only to `127.0.0.1`. Do not expose it to
+untrusted networks.
 
 ## Features
 
-- Live message stream with expandable, syntax-highlighted JSON (vendored highlighter — fully offline, no CDN)
+- Live message stream with expandable, syntax-highlighted JSON (vendored highlighter, fully offline, no CDN)
 - Timeline view: group the stream by session into expandable per-interaction traces with category badges
 - Chat panel: converse with the assistant in text with a stable session id (multi-turn/converse works) while watching the bus handle each turn
-- Filter by message type (glob patterns — e.g. `ovos.*`, `recognizer_loop:*`)
-- Full-text search across type / data / context / session
+- Filter by message type (glob patterns, for example `ovos.*`, `recognizer_loop:*`)
+- Full-text search across type, data, context, and session
+
 - Filter by session ID, source, destination
 - Sort newest-first or oldest-first
-- Pause/resume capture, plus auto-pause on filter match
+- Pause and resume capture, plus auto-pause on filter match
 - Bounded client-side buffer (configurable, dropped-count visible)
-- Export as JSONL or JSON (client-side or via `/api/export`)
-- Message injection (type + JSON `data` + optional JSON `context` → bus)
+- Export as JSONL or JSON (client-side or through `/api/export`)
+
+- Message injection (type plus JSON `data` and optional JSON `context` sent to the bus)
 - Ring buffer with configurable capacity and `since_id` pagination
-- GitHub Pages deployable (Mode 1 — no server needed)
+- GitHub Pages deployable (Mode 1, no server needed)
 
 ## Development
 
@@ -138,14 +148,14 @@ Do not expose it to the public internet or run it unattended.
 
 ## Related projects
 
-- [ovos-messagebus](https://github.com/OpenVoiceOS/ovos-messagebus) — the bus server this tool monitors
-- [ovos-bus-client](https://github.com/OpenVoiceOS/ovos-bus-client) — the client library used in service mode
-- [ovos-core](https://github.com/OpenVoiceOS/ovos-core) — the intent pipeline whose traffic you'll be tracing
-- [hivemind-core](https://github.com/JarbasHiveMind/hivemind-core) — protected remote access to a bus, busmon works there too
+- [ovos-messagebus](https://github.com/OpenVoiceOS/ovos-messagebus): the bus server this tool monitors
+- [ovos-bus-client](https://github.com/OpenVoiceOS/ovos-bus-client): the client library used in service mode
+- [ovos-core](https://github.com/OpenVoiceOS/ovos-core): the intent pipeline whose traffic you trace with this tool
+- [hivemind-core](https://github.com/JarbasHiveMind/hivemind-core): protected remote access to a bus, where busmon also works
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
 
 ## Credits
 
