@@ -1,20 +1,12 @@
 # Changelog
 
-## [0.1.0a3](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.0a3) (2026-07-23)
+## [0.1.1a1](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a1) (2026-07-23)
 
-[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.0a2...0.1.0a3)
-
-**Merged pull requests:**
-
-- ci: fix workflow startup failures \(undeclared secrets, dead conventional-label\) [\#16](https://github.com/OpenVoiceOS/ovos-busmon/pull/16) ([JarbasAl](https://github.com/JarbasAl))
-
-## [0.1.0a2](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.0a2) (2026-07-23)
-
-[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.0.0...0.1.0a2)
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.0...0.1.1a1)
 
 **Merged pull requests:**
 
-- ci: modernize workflows to current gh-automations standard [\#14](https://github.com/OpenVoiceOS/ovos-busmon/pull/14) ([JarbasAl](https://github.com/JarbasAl))
+- ci: enable GitHub Pages deploy of the static UI [\#18](https://github.com/OpenVoiceOS/ovos-busmon/pull/18) ([JarbasAl](https://github.com/JarbasAl))
 
 
 

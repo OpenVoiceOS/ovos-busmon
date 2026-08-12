@@ -3,15 +3,14 @@ from __future__ import annotations
 
 import asyncio
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+
+# Patch ovos_bus_client before importing service so the lifespan
+# bus connect does not try to reach a real bus.
+from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-
-# Patch ovos_bus_client before importing service so the lifespan
-# bus connect does not try to reach a real bus.
-import sys, types
 
 # Stub ovos_bus_client so tests run without a real OVOS bus.
 # Always replace the client submodule because the real installed package
@@ -51,19 +50,22 @@ class _SM:
 
 # Ensure top-level module has Message
 import ovos_bus_client as _obc_top
+
 if not hasattr(_obc_top, "Message"):
     _obc_top.Message = _Msg
 
 # Unconditionally inject AsyncMessageBusClient into the client submodule
 import ovos_bus_client.client as _obc_client
+
 _obc_client.AsyncMessageBusClient = _AsyncBus
 
 # Inject SessionManager stub into session submodule
 import ovos_bus_client.session as _obc_sess
+
 if not hasattr(_obc_sess, "SessionManager"):
     _obc_sess.SessionManager = _SM
 
-from ovos_busmon.service import app, _buffer, _subscribers
+from ovos_busmon.service import _buffer, _subscribers, app
 
 
 @pytest_asyncio.fixture
@@ -132,7 +134,7 @@ async def test_export_jsonl(client):
 
     r = await client.get("/api/export")
     assert r.status_code == 200
-    lines = [l for l in r.text.split("\n") if l.strip()]
+    lines = [ln for ln in r.text.split("\n") if ln.strip()]
     assert len(lines) == 3
     for line in lines:
         obj = json.loads(line)
@@ -155,13 +157,61 @@ async def test_send_ok(client):
 
 
 @pytest.mark.asyncio
-async def test_chat_requires_auth():
-    """POST /api/chat must reject unauthenticated requests, same as /api/send."""
+async def test_auth_off_by_default():
+    """With no token or username/password configured, the API is open (the
+    loopback dev default). There are NO default credentials anymore."""
+    import ovos_busmon.service as svc
+    assert not svc._auth_configured()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test",
     ) as c:
+        r = await c.get("/api/status")
+    assert r.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_token_auth_enforced_when_set(monkeypatch):
+    """When BUSMON_TOKEN is set, a mutating endpoint rejects a request with no
+    token and accepts one via ?token= or Authorization: Bearer."""
+    import ovos_busmon.service as svc
+    monkeypatch.setattr(svc, "TOKEN", "s3cret")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test",
+    ) as c:
+        # no token -> 401
         r = await c.post("/api/chat", json={"utterance": "hi", "session_id": "s1"})
-    assert r.status_code == 401
+        assert r.status_code == 401
+        # wrong token -> 401
+        r = await c.post("/api/chat?token=nope",
+                         json={"utterance": "hi", "session_id": "s1"})
+        assert r.status_code == 401
+        # correct token via query param
+        r = await c.get("/api/status?token=s3cret")
+        assert r.status_code == 200
+        # correct token via Authorization: Bearer
+        r = await c.get("/api/status", headers={"Authorization": "Bearer s3cret"})
+        assert r.status_code == 200
+
+
+def test_require_auth_or_exit():
+    """A non-loopback bind without any auth must refuse to start; loopback, or a
+    non-loopback bind WITH auth, must be allowed."""
+    import pytest as _pt
+
+    import ovos_busmon.service as svc
+    # non-loopback + no auth -> SystemExit(2)
+    svc.TOKEN = svc.USERNAME = svc.PASSWORD = ""
+    with _pt.raises(SystemExit) as ei:
+        svc._require_auth_or_exit("0.0.0.0")
+    assert ei.value.code == 2
+    # loopback + no auth -> allowed
+    svc._require_auth_or_exit("127.0.0.1")
+    # non-loopback + token -> allowed
+    svc.TOKEN = "s3cret"
+    try:
+        svc._require_auth_or_exit("0.0.0.0")
+    finally:
+        svc.TOKEN = ""
 
 
 @pytest.mark.asyncio
@@ -227,8 +277,8 @@ async def test_chat_speak_reply_reaches_stream_for_matching_session():
     /api/chat must reach the SSE stream (what the chat panel filters on
     client-side to render an assistant bubble).
     """
-    from ovos_busmon.service import _broadcast_to_sse, _subscribers
     from ovos_busmon.buffer import CapturedMessage
+    from ovos_busmon.service import _broadcast_to_sse, _subscribers
 
     session_id = "chat-abc123"
     q: asyncio.Queue = asyncio.Queue(maxsize=10)
@@ -285,3 +335,18 @@ async def test_sse_stream_broadcasts():
         assert received["type"] == "speak"
     finally:
         _subscribers.discard(q)
+
+
+@pytest.mark.asyncio
+async def test_slow_sse_consumer_is_not_dropped():
+    """A subscriber whose queue is full keeps its subscription and receives the
+    newest payload (oldest queued item is dropped instead of the subscriber)."""
+    import ovos_busmon.service as svc
+    svc._subscribers.clear()
+    q = asyncio.Queue(maxsize=1)
+    q.put_nowait({"seq": "old"})  # queue now full
+    svc._subscribers.add(q)
+    await svc._broadcast_to_sse({"seq": "new"})
+    assert q in svc._subscribers, "slow-but-alive subscriber must stay subscribed"
+    assert q.get_nowait() == {"seq": "new"}, "newest payload must be delivered"
+    svc._subscribers.clear()
