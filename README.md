@@ -1,10 +1,10 @@
 # ovos-busmon
 
 Live monitor, capture, and injection tool for the [OpenVoiceOS](https://openvoiceos.org) messagebus.
-Stream every bus message to a browser, filter by type (glob), inspect payloads,
+Stream every bus message to a browser, filter by kind, inspect payloads,
 export captures as JSONL, and inject messages from the UI.
 
-![timeline view tracing one interaction](docs/img/timeline-view.png)
+![Group by session tracing one interaction](docs/img/timeline-view.png)
 
 See the [docs](docs/index.md) for a full walkthrough with screenshots. Start
 with the [tutorials](docs/tutorials.md).
@@ -19,9 +19,9 @@ with the `?host=&port=` query parameters.
 
 Browser note: Chromium browsers allow a `ws://localhost` connection from an
 `https://` page, because localhost is a trustworthy origin. Safari and some
-Firefox versions block it. If the connection is refused, click **Download
-standalone HTML** in the UI and open the saved file locally. It has the same
-functions and no restrictions.
+Firefox versions block it. If the connection is refused, click **Save offline
+copy** in the UI and open the saved file locally. It has the same functions and
+no restrictions.
 
 ## Two transport modes, one UI
 
@@ -113,8 +113,10 @@ The service binds only to `127.0.0.1` by default. Do not expose it to untrusted 
 
 ## Features
 
-- Live message stream with expandable, highlighted JSON (vendored highlighter, fully offline, no CDN)
-- Timeline view: group the stream by session into expandable per-interaction traces with category badges
+- Live "now" line: the assistant state (Heard, Thinking, Speaking, or Didn't understand), inferred from the latest traffic
+- Live message stream with a per-kind color dot and expandable, highlighted JSON (vendored highlighter, fully offline, no CDN)
+- Quick-filter chips with live counts, one each for Heard, Intents, Skills, Speech, or Errors. Errors also get a red edge
+- Group by session: group the stream into expandable per-interaction traces
 - Chat panel: chat with the assistant in text over one stable session id (multi-turn and converse work) while you watch the bus handle each turn
 - Filter by message type (glob patterns, for example `ovos.*` or `recognizer_loop:*`)
 - Full-text search across type, data, context and session

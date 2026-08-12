@@ -11,9 +11,9 @@ starts. The browser reports a blocked or refused WebSocket.
 **Cause.** A browser can block a `ws://localhost` connection from an `https://`
 page. Chromium browsers allow it. Safari and some Firefox versions block it.
 
-**Fix.** Use the standalone file:
+**Fix.** Use the offline copy:
 
-1. Click **Standalone HTML** in the toolbar.
+1. Click **Save offline copy** in the Data panel.
 2. Save the file to your disk.
 3. Open the saved file in the browser.
 

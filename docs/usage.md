@@ -6,12 +6,24 @@ each part of the UI. For installation and the transport modes, see the
 [README](../README.md). For a step-by-step walkthrough, see the
 [tutorials](tutorials.md).
 
+## The now line
+
+A single line at the top says what the assistant is doing right now. It reads
+the latest meaningful traffic and shows one state: *Heard*, *Thinking*,
+*Speaking*, or *Didn't understand*. Use it to see the assistant's state at a
+glance without reading the stream.
+
 ## The live stream
 
-The default view is a flat, live list of every bus message. Each row shows the
-message type, the time, and the session, source, and destination routing
-fields. Click a row to expand its `data`, `context` and `session` payloads as
-highlighted JSON.
+The default view is a flat, live list of every bus message. Each row shows a
+color dot for the message kind, the message type, the time, and the session,
+source, and destination as small chips. Click a row to expand its `data`,
+`context` and `session` payloads as highlighted JSON. **Copy JSON** copies the
+whole message.
+
+The dot colors match the legend above the stream: Heard, Intent, Skill, Speech,
+Error, and Other. An **error** message also gets a red edge, so a failure stands
+out.
 
 ![Desktop: the flat stream](img/flat-stream.png)
 
@@ -23,14 +35,18 @@ highlighted JSON.
 
 ### Filtering
 
-The top bar filters the visible stream. It does not discard anything from the
-capture buffer.
+The Filter panel filters the visible stream. It does not discard anything from
+the capture buffer.
 
-- **Type filter**: glob patterns, for example `ovos.*`, `recognizer_loop:*`, or
+- **Quick-filter chips**: one click shows only one kind, such as Heard,
+  Intents, Skills, Speech, or Errors. Each chip shows a live count. **All**
+  clears the chip filter.
+- **Type (glob)**: glob patterns, for example `ovos.*`, `recognizer_loop:*`, or
   `speak`.
-- **Search**: full-text across type, data, context and session.
-- **Session, source, and destination**: match each routing field exactly.
-- **Sort**: newest first (the default) or oldest first.
+- **Search content**: full-text across type, data, context and session.
+- **More filters**: match the session, source, or destination field.
+- **Order**: newest first (the default) or oldest first.
+- **Clear filters**: reset every filter and the selected chip.
 
 ![Desktop: the type filter shows only speak messages](img/filter-speak.png)
 
@@ -39,24 +55,24 @@ capture buffer.
 ### Buffer and pause
 
 The client keeps a bounded buffer. The default is 5000 messages, and you set the
-size in the toolbar. The client drops the oldest messages first, and the status
-bar shows how many it dropped.
+size in **Buffer settings**. The client drops the oldest messages first, and the
+status bar shows how many it dropped.
 
-**Pause** stops ingestion. **Pause on filter match** stops the stream the
-instant an incoming message matches the active filters. Use it to catch one
-specific message live without losing it to scrollback.
+**Pause** stops ingestion. **Pause when a message matches the filter** stops the
+stream the instant an incoming message matches the active filters. Use it to
+catch one specific message live without losing it to scrollback.
 
-## Timeline view
+## Group by session
 
-**Timeline view** groups the flat stream by session id. When a session id is
+**Group by session** groups the flat stream by session id. When a session id is
 absent, it falls back to an utterance-correlation id in `context`. One
 interaction then reads as a single expandable trace: utterance, then pipeline
-match, then skill handler, then speak output. Each step carries a category
-badge: `utterance`, `pipeline`, `skill`, `output`, or `other`.
+match, then skill handler, then speak output. Each step carries the same color
+dot as the flat stream: Heard, Intent, Skill, Speech, Error, or Other.
 
-![Desktop: the Timeline view with an expanded trace](img/timeline-view.png)
+![Desktop: Group by session with an expanded trace](img/timeline-view.png)
 
-![Mobile: the Timeline view with an expanded trace](img/timeline-view-mobile.png)
+![Mobile: Group by session with an expanded trace](img/timeline-view-mobile.png)
 
 ## Chat panel
 
