@@ -1,45 +1,47 @@
 # ovos-busmon
 
 Live monitor, capture, and injection tool for the [OpenVoiceOS](https://openvoiceos.org) messagebus.
-Stream every bus message to a browser, filter by type (glob), inspect payloads, export captures as JSONL, and inject messages directly from the UI.
+Stream every bus message to a browser, filter by type (glob), inspect payloads,
+export captures as JSONL, and inject messages from the UI.
 
 ![timeline view tracing one interaction](docs/img/timeline-view.png)
 
-See [docs/usage.md](docs/usage.md) for a full walkthrough with screenshots.
+See the [docs](docs/index.md) for a full walkthrough with screenshots. Start
+with the [tutorials](docs/tutorials.md).
 
 ## Debug your OVOS device from a URL
 
-The monitor UI is a single static page. Hosted on GitHub Pages, anyone can open
-the URL on a laptop that can reach an OVOS device and connect to its messagebus
-immediately — no install, no server: the page opens a WebSocket straight to
-`ws://localhost:8181/core` (host/port configurable in the connection panel or
-via `?host=&port=` query parameters).
+The monitor UI is a single static page. Host it on GitHub Pages, and anyone with
+a laptop that can reach an OVOS device connects to its messagebus at once. No
+install, no server: the page opens a WebSocket straight to
+`ws://localhost:8181/core`. Set the host and port in the connection panel or
+with the `?host=&port=` query parameters.
 
-Browser note: Chromium-based browsers allow a `ws://localhost` connection from
-an `https://` page (localhost is a trustworthy origin); Safari and some Firefox
-versions block it. If the connection is refused, use the **Download standalone
-HTML** button in the UI and open the saved file locally — identical
-functionality, no restrictions.
+Browser note: Chromium browsers allow a `ws://localhost` connection from an
+`https://` page, because localhost is a trustworthy origin. Safari and some
+Firefox versions block it. If the connection is refused, click **Download
+standalone HTML** in the UI and open the saved file locally. It has the same
+functions and no restrictions.
 
-## Two transport modes — one UI
+## Two transport modes, one UI
 
-### Mode 1 — fully in-browser (zero server)
+### Mode 1: fully in-browser (zero server)
 
-Open `static/index.html` directly (or deploy it to GitHub Pages).
+Open `static/index.html` directly, or deploy it to GitHub Pages.
 The page opens a WebSocket **directly to the OVOS messagebus** (`ws://localhost:8181/core` by default).
-Configure host/port/path via the connection panel in the UI or via query parameters:
+Set the host, port, and path in the connection panel or with query parameters:
 
 ```
 file:///path/to/static/index.html?host=192.168.1.10&port=8181&path=/core
 ```
 
-Works whenever the browser can reach the bus (same machine as OVOS, or LAN).
-No server required.
+This works whenever the browser can reach the bus, on the same machine as OVOS
+or on a LAN. No server is required.
 
-### Mode 2 — service (`ovos-busmon`)
+### Mode 2: service (`ovos-busmon`)
 
 Install and run the FastAPI service.
-It connects **server-side** to the bus via `ovos-bus-client` and serves:
+It connects **server-side** to the bus through `ovos-bus-client` and serves:
 
 | Endpoint | Description |
 |---|---|
@@ -51,9 +53,9 @@ It connects **server-side** to the bus via `ovos-bus-client` and serves:
 | `POST /api/chat` | Send a text utterance as a real client would (chat panel) |
 | `GET /api/export` | JSONL download of the full capture buffer |
 
-The UI auto-detects which transport to use:
-- served from `http://` / `https://` → SSE + REST (Mode 2)
-- opened as `file://` or from a static host → direct WebSocket (Mode 1)
+The UI auto-detects the transport:
+- served from `http://` or `https://`: SSE and REST (Mode 2)
+- opened as `file://` or from a static host: direct WebSocket (Mode 1)
 
 ## Installation
 
@@ -78,7 +80,7 @@ ovos-busmon
 
 ### Configuration
 
-All settings via environment variables (or a `.env` file):
+Set every option through environment variables, or through a `.env` file:
 
 | Variable | Default | Description |
 |---|---|---|
@@ -86,9 +88,13 @@ All settings via environment variables (or a `.env` file):
 | `OVOS_BUS_PORT` | `8181` | OVOS messagebus port |
 | `BUSMON_HOST` | `127.0.0.1` | Address to bind the HTTP service |
 | `BUSMON_PORT` | `8005` | Port to bind the HTTP service |
-| `BUSMON_USERNAME` | `ovos` | HTTP Basic auth username |
-| `BUSMON_PASSWORD` | `ovos` | HTTP Basic auth password |
+| `BUSMON_TOKEN` | (empty) | Shared-secret token. When set, the API needs it |
+| `BUSMON_USERNAME` | (empty) | HTTP Basic auth username |
+| `BUSMON_PASSWORD` | (empty) | HTTP Basic auth password |
 | `BUFFER_SIZE` | `2000` | Ring buffer capacity (messages) |
+
+Authentication is off until you set `BUSMON_TOKEN`, or `BUSMON_USERNAME` and
+`BUSMON_PASSWORD`. There are no default credentials.
 
 ### Docker
 
@@ -97,29 +103,29 @@ docker compose up --build
 ```
 
 The compose file binds the service to `127.0.0.1:8005` only (localhost).
-To reach an OVOS bus on the host machine, `OVOS_BUS_HOST=host.docker.internal` is set automatically.
+To reach an OVOS bus on the host machine, it sets `OVOS_BUS_HOST=host.docker.internal` automatically.
 
 ## Message injection
 
 The **Inject** panel is a power tool.
-It sends arbitrary messages onto the bus — useful for development and testing.
-By default the service binds only to `127.0.0.1`; do not expose it to untrusted networks.
+It sends arbitrary messages onto the bus, which helps with development and testing.
+The service binds only to `127.0.0.1` by default. Do not expose it to untrusted networks.
 
 ## Features
 
-- Live message stream with expandable, syntax-highlighted JSON (vendored highlighter — fully offline, no CDN)
+- Live message stream with expandable, highlighted JSON (vendored highlighter, fully offline, no CDN)
 - Timeline view: group the stream by session into expandable per-interaction traces with category badges
-- Chat panel: converse with the assistant in text with a stable session id (multi-turn/converse works) while watching the bus handle each turn
-- Filter by message type (glob patterns — e.g. `ovos.*`, `recognizer_loop:*`)
-- Full-text search across type / data / context / session
-- Filter by session ID, source, destination
+- Chat panel: chat with the assistant in text over one stable session id (multi-turn and converse work) while you watch the bus handle each turn
+- Filter by message type (glob patterns, for example `ovos.*` or `recognizer_loop:*`)
+- Full-text search across type, data, context and session
+- Filter by session id, source, and destination
 - Sort newest-first or oldest-first
-- Pause/resume capture, plus auto-pause on filter match
-- Bounded client-side buffer (configurable, dropped-count visible)
-- Export as JSONL or JSON (client-side or via `/api/export`)
-- Message injection (type + JSON `data` + optional JSON `context` → bus)
+- Pause and resume capture, plus auto-pause on filter match
+- Bounded client-side buffer (configurable, with a visible dropped-count)
+- Export as JSONL or JSON (client-side or through `/api/export`)
+- Message injection (type, JSON `data`, and optional JSON `context`)
 - Ring buffer with configurable capacity and `since_id` pagination
-- GitHub Pages deployable (Mode 1 — no server needed)
+- GitHub Pages deployable (Mode 1, no server needed)
 
 ## Development
 
@@ -130,22 +136,30 @@ pytest tests/ -v
 
 ## Security
 
-ovos-busmon is a local debugging tool.
-HTTP Basic auth protects the service endpoint, but credentials are sent in plaintext unless you add TLS.
-Keep the default `127.0.0.1` binding.
-The injection endpoint gives anyone who can reach it full ability to emit any message on the bus.
-Do not expose it to the public internet or run it unattended.
+ovos-busmon is a local debugging tool. It can inject any message onto the bus,
+so an open bind beyond loopback is a remote-control hole.
+
+Authentication is off by default and is meant for loopback use. There are no
+default credentials. To use the service beyond loopback, set `BUSMON_TOKEN`
+(recommended), or set `BUSMON_USERNAME` and `BUSMON_PASSWORD`. The service
+refuses to start on a non-loopback host when no authentication is set.
+
+A token travels as `?token=` on the URL or as an `Authorization: Bearer` header.
+The `?token=` form lets the live UI carry the token on its SSE stream, which
+HTTP Basic cannot. HTTP Basic auth sends credentials in plaintext unless you add
+TLS. Keep the default `127.0.0.1` bind for local use, and do not expose the
+service to the public internet.
 
 ## Related projects
 
-- [ovos-messagebus](https://github.com/OpenVoiceOS/ovos-messagebus) — the bus server this tool monitors
-- [ovos-bus-client](https://github.com/OpenVoiceOS/ovos-bus-client) — the client library used in service mode
-- [ovos-core](https://github.com/OpenVoiceOS/ovos-core) — the intent pipeline whose traffic you'll be tracing
-- [hivemind-core](https://github.com/JarbasHiveMind/hivemind-core) — protected remote access to a bus, busmon works there too
+- [ovos-messagebus](https://github.com/OpenVoiceOS/ovos-messagebus): the bus server this tool monitors
+- [ovos-bus-client](https://github.com/OpenVoiceOS/ovos-bus-client): the client library used in service mode
+- [ovos-core](https://github.com/OpenVoiceOS/ovos-core): the intent pipeline whose traffic you trace
+- [hivemind-core](https://github.com/JarbasHiveMind/hivemind-core): protected remote access to a bus, where busmon also works
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
 
 ## Credits
 
