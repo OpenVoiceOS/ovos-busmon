@@ -245,6 +245,32 @@
 </footer>
 
 <script>
+// ─── Auth token ───────────────────────────────────────────────────────────────
+// Optional shared secret for the service-mode API. Read once from ?token= and
+// kept in localStorage so it survives navigation. It travels as an
+// Authorization header on fetches and as ?token= on the SSE EventSource URL
+// (EventSource cannot set headers), so authentication and the live UI coexist.
+const AUTH_TOKEN = (function () {
+  try {
+    const u = new URLSearchParams(location.search).get('token');
+    if (u) localStorage.setItem('busmon_token', u);
+    return u || localStorage.getItem('busmon_token') || '';
+  } catch (e) { return ''; }
+})();
+function authFetch(url, opts) {
+  opts = opts || {};
+  if (AUTH_TOKEN) {
+    const h = new Headers(opts.headers || {});
+    h.set('Authorization', 'Bearer ' + AUTH_TOKEN);
+    opts = Object.assign({}, opts, { headers: h });
+  }
+  return fetch(url, opts);
+}
+function withToken(url) {
+  if (!AUTH_TOKEN) return url;
+  return url + (url.indexOf('?') === -1 ? '?' : '&') + 'token=' + encodeURIComponent(AUTH_TOKEN);
+}
+
 // ─── State ────────────────────────────────────────────────────────────────────
 const DEFAULT_MAX_BUFFER = 5000;
 let messages = [];
@@ -313,7 +339,7 @@ let transportMode = 'ws';
 
 async function detectTransport() {
   try {
-    const r = await fetch('api/status', {signal: AbortSignal.timeout(1500)});
+    const r = await authFetch('api/status', {signal: AbortSignal.timeout(1500)});
     if (r.ok) return 'sse';
   } catch (e) { /* no service behind this origin */ }
   return 'ws';
@@ -336,7 +362,7 @@ function startSSE() {
   setBadge('sse', 'SSE (service)');
 
   // Backfill from ring buffer
-  fetch('api/messages?since_id=0&limit=500')
+  authFetch('api/messages?since_id=0&limit=500')
     .then(r => r.json())
     .then(msgs => {
       msgs.forEach(m => pushMessage(normaliseServiceMsg(m)));
@@ -348,7 +374,7 @@ function startSSE() {
 
 function connectSSE() {
   if (_sseSource) _sseSource.close();
-  _sseSource = new EventSource('api/stream');
+  _sseSource = new EventSource(withToken('api/stream'));
   _sseSource.onopen  = () => setBadge('sse', 'SSE (service)');
   _sseSource.onerror = () => setBadge('err', 'SSE error — reconnecting…');
   _sseSource.addEventListener('message', e => {
@@ -435,7 +461,7 @@ async function injectMessage() {
     // Mode 2 — POST to API. The service's own bus listener rebroadcasts
     // whatever it emits, so the sent message reappears in the live stream
     // like any other — no special-casing needed here.
-    const resp = await fetch('api/send', {
+    const resp = await authFetch('api/send', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({type: msgType, data: payload, context: context}),
@@ -698,7 +724,7 @@ function clearBuffer() {
 function exportJSONL() {
   if (transportMode === 'sse') {
     // Use the server's full capture buffer
-    window.location.href = 'api/export';
+    window.location.href = withToken('api/export');
     return;
   }
   const lines = messages.map(m => JSON.stringify(m)).join('\n');
@@ -778,7 +804,7 @@ async function sendChat() {
   appendChatBubble('me', text);
   input.value = '';
   try {
-    const resp = await fetch('api/chat', {
+    const resp = await authFetch('api/chat', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({utterance: text, lang: 'en-us', session_id: chatSessionId}),

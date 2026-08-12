@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.responses import PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -90,8 +90,25 @@ OVOS_BUS_HOST = os.getenv("OVOS_BUS_HOST", "localhost")
 OVOS_BUS_PORT = int(os.getenv("OVOS_BUS_PORT", "8181"))
 BUFFER_SIZE = int(os.getenv("BUFFER_SIZE", "2000"))
 
-USERNAME = os.getenv("BUSMON_USERNAME", os.getenv("USERNAME", "ovos"))
-PASSWORD = os.getenv("BUSMON_PASSWORD", os.getenv("PASSWORD", "ovos"))
+# No default credentials. Auth is OFF unless a token or a username/password is
+# configured. The old code defaulted both to "ovos" (and read the shell's
+# USERNAME/PASSWORD env), which shipped a well-known credential: on a
+# non-loopback bind anyone could POST /api/send and inject bus messages. The
+# default is removed; a non-loopback bind now REQUIRES auth (see main()).
+USERNAME = os.getenv("BUSMON_USERNAME", "")
+PASSWORD = os.getenv("BUSMON_PASSWORD", "")
+# A shared-secret token. Unlike HTTP Basic, a token can travel on the SSE
+# (EventSource) URL as ?token=, so authentication and the live UI can coexist —
+# HTTP Basic could not, which silently pushed people to run with auth off.
+TOKEN = os.getenv("BUSMON_TOKEN", "")
+
+# 0.0.0.0 / :: are wildcard binds (all interfaces) — deliberately NOT loopback,
+# so they require auth.
+_LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "::1")
+
+
+def _auth_configured() -> bool:
+    return bool(TOKEN or USERNAME or PASSWORD)
 
 STATIC_DIR = Path(__file__).parent.parent / "static"
 
@@ -103,13 +120,20 @@ _subscribers: set[asyncio.Queue] = set()
 # ─── SSE helpers ─────────────────────────────────────────────────────────────
 
 async def _broadcast_to_sse(payload: dict) -> None:
-    dead = set()
     for q in _subscribers:
         try:
             q.put_nowait(payload)
         except asyncio.QueueFull:
-            dead.add(q)
-    _subscribers.difference_update(dead)
+            # A momentarily slow consumer must not be silently and permanently
+            # unsubscribed (that dropped ALL its future messages). Drop its
+            # OLDEST queued item to make room and keep it live; a truly
+            # disconnected client is removed by the /api/stream generator's
+            # finally, not here.
+            try:
+                q.get_nowait()
+                q.put_nowait(payload)
+            except (asyncio.QueueEmpty, asyncio.QueueFull):
+                pass
 
 
 # ─── Bus connection lifecycle ─────────────────────────────────────────────────
@@ -176,26 +200,31 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 _security = HTTPBasic(auto_error=False)
 
 
-def _verify(credentials: Optional[HTTPBasicCredentials] = Depends(_security)):
-    if not USERNAME and not PASSWORD:
-        return None  # auth disabled
-    if not credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-    ok = (
-        secrets.compare_digest(credentials.username, USERNAME)
-        and secrets.compare_digest(credentials.password, PASSWORD)
+def _verify(request: Request,
+            credentials: Optional[HTTPBasicCredentials] = Depends(_security)):
+    if not _auth_configured():
+        return None  # auth disabled (the loopback dev default)
+    # A token authenticates via ?token= (which the SSE EventSource URL can
+    # carry) or Authorization: Bearer. compare_digest is done on bytes: on str
+    # it rejects non-ASCII and a crafted value would raise TypeError (a 500).
+    if TOKEN:
+        tok = request.query_params.get("token")
+        if not tok:
+            auth = request.headers.get("authorization", "")
+            if auth.lower().startswith("bearer "):
+                tok = auth[7:].strip()
+        if tok and secrets.compare_digest(tok.encode(), TOKEN.encode()):
+            return "token"
+    # HTTP Basic, when a username/password is configured.
+    if (USERNAME or PASSWORD) and credentials:
+        if (secrets.compare_digest(credentials.username.encode(), USERNAME.encode())
+                and secrets.compare_digest(credentials.password.encode(), PASSWORD.encode())):
+            return credentials.username
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Authentication required",
+        headers={"WWW-Authenticate": "Basic"},
     )
-    if not ok:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect credentials",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-    return credentials.username
 
 
 # ─── App ──────────────────────────────────────────────────────────────────────
@@ -326,11 +355,30 @@ if STATIC_DIR.exists():
 
 # ─── Entry point ─────────────────────────────────────────────────────────────
 
+def _require_auth_or_exit(host: str) -> None:
+    """Refuse to expose an unauthenticated monitor beyond loopback.
+
+    ovos-busmon can inject bus messages (speak, shutdown, config), so an open
+    non-loopback bind is a remote-control hole. Bind a loopback address for
+    zero-auth local use, or set BUSMON_TOKEN (or BUSMON_USERNAME/PASSWORD).
+    """
+    if host not in _LOOPBACK_HOSTS and not _auth_configured():
+        import sys
+        print(
+            f"ERROR: refusing to bind non-loopback host {host!r} without "
+            f"authentication. Set BUSMON_TOKEN (recommended) or "
+            f"BUSMON_USERNAME/BUSMON_PASSWORD, or bind a loopback address.",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+
+
 def main():
     import uvicorn
 
     host = os.getenv("BUSMON_HOST", "127.0.0.1")
     port = int(os.getenv("BUSMON_PORT", "8005"))
+    _require_auth_or_exit(host)
     uvicorn.run("ovos_busmon.service:app", host=host, port=port, reload=False)
 
 
