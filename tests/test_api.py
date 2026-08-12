@@ -3,15 +3,14 @@ from __future__ import annotations
 
 import asyncio
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+
+# Patch ovos_bus_client before importing service so the lifespan
+# bus connect does not try to reach a real bus.
+from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-
-# Patch ovos_bus_client before importing service so the lifespan
-# bus connect does not try to reach a real bus.
-import sys, types
 
 # Stub ovos_bus_client so tests run without a real OVOS bus.
 # Always replace the client submodule because the real installed package
@@ -51,19 +50,22 @@ class _SM:
 
 # Ensure top-level module has Message
 import ovos_bus_client as _obc_top
+
 if not hasattr(_obc_top, "Message"):
     _obc_top.Message = _Msg
 
 # Unconditionally inject AsyncMessageBusClient into the client submodule
 import ovos_bus_client.client as _obc_client
+
 _obc_client.AsyncMessageBusClient = _AsyncBus
 
 # Inject SessionManager stub into session submodule
 import ovos_bus_client.session as _obc_sess
+
 if not hasattr(_obc_sess, "SessionManager"):
     _obc_sess.SessionManager = _SM
 
-from ovos_busmon.service import app, _buffer, _subscribers
+from ovos_busmon.service import _buffer, _subscribers, app
 
 
 @pytest_asyncio.fixture
@@ -132,7 +134,7 @@ async def test_export_jsonl(client):
 
     r = await client.get("/api/export")
     assert r.status_code == 200
-    lines = [l for l in r.text.split("\n") if l.strip()]
+    lines = [ln for ln in r.text.split("\n") if ln.strip()]
     assert len(lines) == 3
     for line in lines:
         obj = json.loads(line)
@@ -195,6 +197,7 @@ def test_require_auth_or_exit():
     """A non-loopback bind without any auth must refuse to start; loopback, or a
     non-loopback bind WITH auth, must be allowed."""
     import pytest as _pt
+
     import ovos_busmon.service as svc
     # non-loopback + no auth -> SystemExit(2)
     svc.TOKEN = svc.USERNAME = svc.PASSWORD = ""
@@ -274,8 +277,8 @@ async def test_chat_speak_reply_reaches_stream_for_matching_session():
     /api/chat must reach the SSE stream (what the chat panel filters on
     client-side to render an assistant bubble).
     """
-    from ovos_busmon.service import _broadcast_to_sse, _subscribers
     from ovos_busmon.buffer import CapturedMessage
+    from ovos_busmon.service import _broadcast_to_sse, _subscribers
 
     session_id = "chat-abc123"
     q: asyncio.Queue = asyncio.Queue(maxsize=10)

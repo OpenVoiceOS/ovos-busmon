@@ -12,7 +12,8 @@ from typing import Optional
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
-from fastapi.responses import PlainTextResponse, Response
+from fastapi.responses import Response
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
@@ -194,8 +195,6 @@ async def lifespan(app: FastAPI):
 
 
 # ─── Auth ─────────────────────────────────────────────────────────────────────
-
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 _security = HTTPBasic(auto_error=False)
 

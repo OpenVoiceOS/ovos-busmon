@@ -1,6 +1,7 @@
 """Unit tests for message type glob filtering."""
 import pytest
-from ovos_busmon.buffer import CapturedMessage, RingBuffer
+
+from ovos_busmon.buffer import CapturedMessage
 from ovos_busmon.filters import filter_by_type, matches_glob
 
 

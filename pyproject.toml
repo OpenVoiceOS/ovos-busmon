@@ -53,3 +53,15 @@ testpaths = ["tests"]
 [tool.coverage.run]
 source = ["ovos_busmon"]
 omit = ["tests/*"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+# Declared project ruleset: real errors (E/F/W) + import sorting (I).
+select = ["E", "F", "W", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+# The test module MUST stub ovos_bus_client before importing the service, so
+# imports are deliberately not all at the top.
+"tests/*" = ["E402"]

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import fnmatch
-from typing import List
 
 
 def matches_glob(msg_type: str, pattern: str) -> bool:
