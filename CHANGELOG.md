@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1a2](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a2) (2026-08-12)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a1...0.1.1a2)
+
+**Merged pull requests:**
+
+- docs: beginner-friendly tutorials, troubleshooting, and screenshots [\#21](https://github.com/OpenVoiceOS/ovos-busmon/pull/21) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.1.1a1](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a1) (2026-07-23)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.0...0.1.1a1)
