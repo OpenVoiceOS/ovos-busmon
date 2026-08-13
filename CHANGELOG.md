@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1a17](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a17) (2026-08-13)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a16...0.1.1a17)
+
+**Merged pull requests:**
+
+- fix: busmon capture fidelity round 4 \(no session fabrication, coalesce, backfill\) [\#51](https://github.com/OpenVoiceOS/ovos-busmon/pull/51) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.1.1a16](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a16) (2026-08-13)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a15...0.1.1a16)
