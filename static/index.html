@@ -933,7 +933,13 @@ async function injectMessage() {
 function reconstructContext(m) {
   const ctx = Object.assign({}, m.context || {});
   if (m.source) ctx.source = m.source;
-  if (m.destination) ctx.destination = m.destination.indexOf(',') !== -1 ? m.destination.split(',') : m.destination;
+  // Only a comma-joined STRING needs splitting back to a list; arrays and any
+  // other spec-legal type (a producer may put a dict/number here) pass through
+  // as-is so Resend never throws on `.indexOf`.
+  if (m.destination) {
+    ctx.destination = (typeof m.destination === 'string' && m.destination.indexOf(',') !== -1)
+      ? m.destination.split(',') : m.destination;
+  }
   if (m.session_data && Object.keys(m.session_data).length) ctx.session = m.session_data;
   return ctx;
 }
@@ -1078,8 +1084,16 @@ function coalesce(list) {
   const out = [];
   for (const m of list) {
     const prev = out[out.length - 1];
-    if (prev && prev.msg.type === m.type) { prev.count++; prev.ids.push(m.id); }
-    else out.push({ msg: m, count: 1, ids: [m.id] });
+    if (prev && prev.msg.type === m.type) {
+      prev.count++; prev.ids.push(m.id);
+      // The representative is always the newest (max id) member of the run, so
+      // the row's data-mid is stable whatever the sort order — otherwise an
+      // open row's id would shift on a sort/filter change and reopen() would
+      // lose it, silently collapsing the payload the user is reading.
+      if (m.id > prev.msg.id) prev.msg = m;
+    } else {
+      out.push({ msg: m, count: 1, ids: [m.id] });
+    }
   }
   return out;
 }
@@ -1577,9 +1591,15 @@ async function sendChat() {
 // built client-side from captured traffic (no new bus messages).
 function addTurnTrace(sid) {
   const log = document.getElementById('chat-log');
+  const since = String(nowMs());
+  // This turn's start is the ceiling for the previous open-ended turn on the
+  // same session, so a later turn's bus events cannot bleed into an earlier
+  // turn's trace.
+  log.querySelectorAll('.chat-trace-btn').forEach(b => {
+    if (b.dataset.sid === sid && !b.dataset.until) b.dataset.until = since;
+  });
   const wrap = document.createElement('div');
   wrap.className = 'chat-trace';
-  const since = String(nowMs());
   wrap.innerHTML = `<button class="chat-trace-btn" data-sid="${escA(sid)}" data-since="${since}">▶ trace</button>` +
                    `<div class="chat-trace-body" style="display:none"></div>`;
   log.appendChild(wrap);
@@ -1587,9 +1607,10 @@ function addTurnTrace(sid) {
 }
 function nowMs() { try { return Date.parse(new Date().toISOString()); } catch (e) { return 0; } }
 
-function renderTurnTrace(bodyEl, sid, sinceMs) {
+function renderTurnTrace(bodyEl, sid, sinceMs, untilMs) {
   const rows = messages
-    .filter(m => m.session === sid && Date.parse(m.timestamp) >= sinceMs)
+    .filter(m => m.session === sid && Date.parse(m.timestamp) >= sinceMs
+                 && (!untilMs || Date.parse(m.timestamp) < untilMs))
     .sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
   bodyEl.innerHTML = rows.length
     ? rows.map(m => `<div class="ctrace-row"><span class="chip-dot cat-${classifyMessage(m)}"></span><code>${esc(m.type)}</code> <span class="ctrace-det">${esc(detailOf(m))}</span></div>`).join('')
@@ -1615,7 +1636,8 @@ function handleChatReply(msg) {
   // Refresh any open turn-traces for this session so events stream in live.
   document.querySelectorAll('.chat-trace-btn.open').forEach(btn => {
     if (btn.dataset.sid === msg.session) {
-      renderTurnTrace(btn.nextElementSibling, msg.session, Number(btn.dataset.since));
+      renderTurnTrace(btn.nextElementSibling, msg.session, Number(btn.dataset.since),
+                      btn.dataset.until ? Number(btn.dataset.until) : null);
     }
   });
 }
@@ -1629,7 +1651,8 @@ document.getElementById('chat-log').addEventListener('click', e => {
   body.style.display = open ? 'none' : 'block';
   btn.classList.toggle('open', !open);
   btn.textContent = (open ? '▶' : '▼') + ' trace';
-  if (!open) renderTurnTrace(body, btn.dataset.sid, Number(btn.dataset.since));
+  if (!open) renderTurnTrace(body, btn.dataset.sid, Number(btn.dataset.since),
+                             btn.dataset.until ? Number(btn.dataset.until) : null);
 });
 
 // ─── Filter listeners ─────────────────────────────────────────────────────────
