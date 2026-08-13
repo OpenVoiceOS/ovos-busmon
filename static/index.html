@@ -6,70 +6,201 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%F0%9F%9A%8C%3C/text%3E%3C/svg%3E">
 <title>OVOS Messagebus Monitor</title>
   <style>
+    /* ─── OpenVoiceOS family design system ───────────────────────────────────
+     * Shared with ovos-webui and ovos-judge: "the signal desk" — warm printed-
+     * manual light by default, a dark instrument face via OS preference or the
+     * header toggle. Tokens are copied verbatim from ovos-webui's app.css. */
+    :root {
+      color-scheme: light dark;
+      --bg: #efeae6;
+      --bg-soft: #e6e0da;
+      --card: #fbf9f7;
+      --card-soft: #f2eeea;
+      --bevel: rgba(255, 255, 255, 0.6);
+      --ink: #191517;
+      --muted: #574f56;         /* AA (>=4.5:1) on both --bg and --card */
+      --line: #ddd4d1;
+      --accent: #c81f26;        /* signal: text, borders, focus, live bits */
+      --accent-strong: #a5161c; /* ember: painted-metal fills */
+      --accent-hover: #8f1319;
+      --accent-ink: #ffffff;
+      --accent-wash: rgba(210, 31, 38, 0.12);
+      --ok: #16733f;
+      --warn: #7a5600;          /* darkened for AA on light cards */
+      --bad: #b21f26;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 1px 2px rgba(20, 10, 12, 0.10), 0 8px 24px rgba(20, 10, 12, 0.09);
+      --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+      --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      /* The JSON readout stays a dark terminal panel in both themes so the
+       * neon syntax highlight remains legible. */
+      --code-bg: #1e2127;
+      --code-ink: #f8f8f2;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #101216;
+        --bg-soft: #0b0d10;
+        --card: #191c21;
+        --card-soft: #21252c;
+        --bevel: rgba(255, 255, 255, 0.06);
+        --ink: #f2efec;
+        --muted: #918c94;
+        --line: #29272e;
+        --accent: #ff3b30;
+        --accent-strong: #9e1b1b;
+        --accent-hover: #b52222;
+        --accent-ink: #fbeceb;
+        --accent-wash: rgba(255, 59, 48, 0.13);
+        --ok: #3ecf6a;
+        --warn: #e6a13c;
+        --bad: #ff5a52;
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 12px 34px rgba(0, 0, 0, 0.42);
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #101216;
+      --bg-soft: #0b0d10;
+      --card: #191c21;
+      --card-soft: #21252c;
+      --bevel: rgba(255, 255, 255, 0.06);
+      --ink: #f2efec;
+      --muted: #918c94;
+      --line: #29272e;
+      --accent: #ff3b30;
+      --accent-strong: #9e1b1b;
+      --accent-hover: #b52222;
+      --accent-ink: #fbeceb;
+      --accent-wash: rgba(255, 59, 48, 0.13);
+      --ok: #3ecf6a;
+      --warn: #e6a13c;
+      --bad: #ff5a52;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 12px 34px rgba(0, 0, 0, 0.42);
+    }
+
     *, *::before, *::after { box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; background: #222; color: #fff; padding: 1em; margin: 0; }
+    body { font-family: var(--sans); background: var(--bg); color: var(--ink); padding: 1em; margin: 0; -webkit-text-size-adjust: 100%; }
     .container { max-width: 1200px; margin: 0 auto; }
     .header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0.5rem 1rem; background-color: #222; border-radius: 8px; margin-bottom: 1rem;
+      display: flex; align-items: center; gap: 0.9rem;
+      padding: 0.6rem 1rem;
+      background:
+        linear-gradient(var(--bevel), transparent 1px),
+        linear-gradient(180deg, var(--card) 0%, var(--bg-soft) 100%);
+      border: 1px solid var(--line);
+      border-bottom: 2px solid var(--accent-strong);
+      border-radius: var(--radius); margin-bottom: 1rem;
     }
     .header img { height: 40px; }
-    .header h1 { color: #f44336; margin: 0; font-size: 1.2rem; }
+    .header h1 { color: var(--ink); margin: 0; font-size: 1.2rem; font-weight: 750; letter-spacing: -0.01em; }
     .transport-badge {
-      font-size: 0.75rem; padding: 3px 8px; border-radius: 10px;
-      background: #444; color: #aaa; margin-left: 8px; vertical-align: middle;
+      font-size: 0.75rem; padding: 3px 8px; border-radius: 999px;
+      background: var(--card-soft); color: var(--muted); margin-left: 8px; vertical-align: middle;
+      font-family: var(--mono); border: 1px solid var(--line);
     }
-    .transport-badge.ws  { background: #1a3a1a; color: #4caf50; }
-    .transport-badge.sse { background: #1a2a3a; color: #2196f3; }
-    .transport-badge.err { background: #3a1a1a; color: #f44336; }
+    .transport-badge.ws  { background: color-mix(in srgb, var(--ok) 16%, transparent);  color: var(--ok);  border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+    .transport-badge.sse { background: var(--accent-wash); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+    .transport-badge.err { background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+    .transport-badge.offline { background: color-mix(in srgb, var(--fg) 10%, transparent); color: var(--fg-muted, var(--fg)); border-color: color-mix(in srgb, var(--fg) 30%, transparent); }
 
-    .controls { margin-top: 1rem; text-align: center; }
-    .row { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.4rem; margin-bottom: 0.4rem; }
+    /* ─── the signature waveform: sound made visible ─────────────────────────
+     * On this bus MONITOR it means live traffic: the bars animate while
+     * messages are streaming in and fall calm when the stream is idle or the
+     * transport is down. Decorative for a screen reader. */
+    .wave { display: flex; align-items: center; gap: 2px; height: 1.7rem; max-width: 22rem; flex: 1 1 auto; overflow: hidden; opacity: 0.5; }
+    .wave i {
+      flex: 0 0 3px; height: 22%; border-radius: 2px;
+      background: var(--accent); transform-origin: center;
+    }
+    .wave i:nth-child(odd)  { height: 45%; }
+    .wave i:nth-child(3n)   { height: 68%; }
+    .wave i:nth-child(4n)   { height: 90%; }
+    .wave i:nth-child(5n)   { height: 34%; }
+    .wave i:nth-child(7n)   { height: 100%; }
+    /* Live: bus messages are arriving. */
+    .wave.running { opacity: 0.9; }
+    .wave.running i { animation: bar 1.1s ease-in-out infinite; }
+    .wave.running i:nth-child(odd) { animation-duration: 1.4s; }
+    .wave.running i:nth-child(3n)  { animation-duration: 0.9s; }
+    .wave.running i:nth-child(4n)  { animation-delay: -0.5s; }
+    .wave.running i:nth-child(5n)  { animation-delay: -0.9s; }
+    .wave.running i:nth-child(2n)  { animation-delay: -0.3s; }
+    @keyframes bar { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
+    /* Transport down: the wave falls silent — one flat line in the brand red. */
+    .wave.flat { gap: 0; opacity: 0.85; }
+    .wave.flat i { height: 3px !important; flex: 1 1 auto; border-radius: 0; background: var(--accent-strong); transform: none; }
+
+    /* The theme control: a quiet icon button, never the red primary weight. */
+    button.theme-toggle {
+      flex: 0 0 auto; margin-left: auto;
+      width: 2.4rem; min-width: 0; height: 2.4rem; padding: 0; margin-top: 0; margin-bottom: 0;
+      font-size: 1.15rem; line-height: 1; font-weight: 400;
+      background: transparent; color: var(--muted);
+      border: 1px solid var(--line); border-radius: var(--radius-sm); cursor: pointer;
+    }
+    button.theme-toggle:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-wash); }
+
+    .controls { margin-top: 1rem; text-align: left; }
+    .row { display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: center; gap: 0.4rem; margin-bottom: 0.4rem; }
     .input, select {
-      background: #444; color: #fff; border: 1px solid #666; border-radius: 4px;
-      padding: 8px 12px; font-size: 0.9em; min-width: 160px; flex: 1 1 160px; max-width: 240px;
+      background: var(--card-soft); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-sm);
+      padding: 8px 12px; font-size: 0.9em; min-height: 44px; min-width: 160px; flex: 1 1 160px; max-width: 260px;
     }
-    .input:focus, select:focus { outline: none; box-shadow: 0 0 4px #f44336; }
+    .input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+    /* Button hierarchy (family app.css): primary solid accent, secondary
+     * outlined/quiet for utilities, danger reserved for consequential acts. */
     .btn {
-      padding: 0.6rem 1rem; cursor: pointer; border: none; border-radius: 4px;
-      background-color: #333; color: white; font-weight: bold; margin: 0.2rem;
+      padding: 0.6rem 1rem; min-height: 44px; cursor: pointer; border: 1px solid transparent; border-radius: var(--radius-sm);
+      background: var(--accent-strong); color: var(--accent-ink); font-weight: 650; margin: 0.2rem;
+      font-size: 0.9em; line-height: 1.1;
     }
-    .btn:hover { background-color: #7a1f1f; }
-    .btn.danger { background-color: #5a1010; }
-    .btn.pause-active { background-color: #7a6010; }
+    .btn:hover { background: var(--accent-hover); }
+    .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .chip:focus-visible, .theme-toggle:focus-visible, .chat-trace-btn:focus-visible,
+    .msg-section button:focus-visible, .ftag button:focus-visible, summary:focus-visible {
+      outline: 2px solid var(--accent); outline-offset: 2px;
+    }
+    .btn.secondary {
+      background: transparent; color: var(--ink); border: 1px solid var(--line); font-weight: 600;
+    }
+    .btn.secondary:hover { background: var(--accent-wash); border-color: var(--accent); color: var(--accent); }
+    .btn.secondary.active { background: var(--accent-wash); border-color: var(--accent); color: var(--accent); }
+    .btn.danger {
+      background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--bad);
+      border: 1px solid color-mix(in srgb, var(--bad) 60%, var(--line)); font-weight: 650;
+    }
+    .btn.danger:hover { background: color-mix(in srgb, var(--bad) 22%, transparent); border-color: var(--bad); }
+    .btn.pause-active { background: color-mix(in srgb, var(--warn) 22%, var(--card)); color: var(--ink); border-color: var(--warn); }
 
     /* Connection config panel */
     .config-panel {
-      background: #2a2a2a; border: 1px solid #555; border-radius: 8px;
-      padding: 0.8rem 1rem; margin-bottom: 0.8rem; text-align: left;
+      background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 0.8rem 1rem; margin-bottom: 0.8rem; text-align: left; box-shadow: var(--shadow);
     }
-    .config-panel summary { cursor: pointer; color: #aaa; font-size: 0.9rem; }
+    .config-panel summary { cursor: pointer; color: var(--muted); font-size: 0.9rem; }
     .config-panel .row { justify-content: flex-start; margin-top: 0.5rem; }
-    .config-panel label { color: #aaa; font-size: 0.85rem; margin-right: 4px; }
+    .config-panel label { color: var(--muted); font-size: 0.85rem; margin-right: 4px; }
 
     /* Inject panel */
     .inject-panel {
-      background: #2a2a2a; border: 1px solid #555; border-radius: 8px;
-      padding: 0.8rem 1rem; margin-bottom: 0.8rem; text-align: left;
+      background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 0.8rem 1rem; margin-bottom: 0.8rem; text-align: left; box-shadow: var(--shadow);
     }
-    .inject-panel summary { cursor: pointer; color: #aaa; font-size: 0.9rem; }
+    .inject-panel summary { cursor: pointer; color: var(--muted); font-size: 0.9rem; }
     .inject-panel textarea {
-      background: #333; color: #fff; border: 1px solid #555; border-radius: 4px;
-      padding: 8px; font-family: monospace; font-size: 0.85rem;
+      background: var(--card-soft); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-sm);
+      padding: 8px; font-family: var(--mono); font-size: 0.85rem;
       width: 100%; min-height: 80px; resize: vertical; margin-top: 0.4rem;
     }
     .inject-status { font-size: 0.85rem; margin-top: 4px; }
 
-    .msg {
-      border: 1px solid #555; padding: 0.8rem; margin-bottom: 0.8rem;
-      background: #333; border-radius: 8px; cursor: pointer;
-    }
-    .msg-type { color: #f44336; font-weight: bold; }
-    .label { color: #bbb; }
+    .label { color: var(--muted); }
     .msg-details { display: none; padding-top: 0.8rem; }
     .msg-section { margin-top: 0.8rem; }
-    .msg-section pre { margin-top: 0.5rem; padding: 10px; background: #444; border-radius: 5px; color: #f8f8f2; overflow: auto; }
-    /* Minimal vendored JSON highlighter — no CDN, works fully offline. */
+    .msg-section pre { margin-top: 0.5rem; padding: 10px; background: var(--code-bg); border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--code-ink); overflow: auto; }
+    /* Minimal vendored JSON highlighter — no CDN, works fully offline. On the
+     * dark code panel in both themes. */
     .jh-key    { color: #66d9ef; }
     .jh-string { color: #a6e22e; }
     .jh-number { color: #ae81ff; }
@@ -78,23 +209,23 @@
     .jh-punct  { color: #ccc; }
     .msg-section button {
       margin-top: 0.3rem; padding: 0.3rem 0.6rem; font-size: 0.85em;
-      background-color: #444; color: #fff; border: 1px solid #666; border-radius: 4px; cursor: pointer;
+      background: var(--card-soft); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-sm); cursor: pointer;
     }
-    .msg-section button:hover { background-color: #555; }
+    .msg-section button:hover { background: var(--accent-wash); border-color: var(--accent); }
 
-    .status-bar { font-size: 0.8rem; color: #888; text-align: right; margin-bottom: 4px; }
+    .status-bar { font-size: 0.8rem; color: var(--muted); text-align: right; margin-bottom: 4px; }
 
     /* Chat panel */
     .layout { display: flex; gap: 1rem; align-items: flex-start; }
     .layout .container { flex: 1 1 auto; min-width: 0; }
     .chat-panel {
       flex: 0 0 320px; max-width: 320px; display: none;
-      background: #2a2a2a; border: 1px solid #555; border-radius: 8px;
-      padding: 0.8rem; position: sticky; top: 0.5rem;
+      background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 0.8rem; position: sticky; top: 0.5rem; box-shadow: var(--shadow);
     }
     .chat-panel.open { display: flex; flex-direction: column; }
-    .chat-panel h2 { margin: 0 0 0.5rem 0; font-size: 1rem; color: #f44336; }
-    .chat-hint { font-size: 0.75rem; color: #888; margin-bottom: 0.5rem; }
+    .chat-panel h2 { margin: 0 0 0.5rem 0; font-size: 1rem; color: var(--accent); }
+    .chat-hint { font-size: 0.75rem; color: var(--muted); margin-bottom: 0.5rem; }
     .chat-log {
       flex: 1 1 auto; min-height: 200px; max-height: 60vh; overflow-y: auto;
       display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.5rem;
@@ -103,48 +234,204 @@
       padding: 0.5rem 0.7rem; border-radius: 10px; font-size: 0.88rem; max-width: 90%;
       word-wrap: break-word; white-space: pre-wrap;
     }
-    .chat-bubble.me    { align-self: flex-end;   background: #f44336; color: #fff; }
-    .chat-bubble.assistant { align-self: flex-start; background: #444; color: #eee; }
-    .chat-bubble.error { align-self: flex-start; background: #5a1010; color: #f88; }
+    .chat-bubble.me    { align-self: flex-end;   background: var(--accent-strong); color: var(--accent-ink); }
+    .chat-bubble.assistant { align-self: flex-start; background: var(--card-soft); color: var(--ink); border: 1px solid var(--line); }
+    .chat-bubble.error { align-self: flex-start; background: color-mix(in srgb, var(--bad) 14%, var(--card)); color: var(--bad); border: 1px solid color-mix(in srgb, var(--bad) 45%, var(--line)); }
     .chat-input-row { display: flex; gap: 0.4rem; }
     .chat-input-row input {
-      flex: 1 1 auto; background: #444; color: #fff; border: 1px solid #666;
-      border-radius: 4px; padding: 6px 10px; font-size: 0.9em;
+      flex: 1 1 auto; background: var(--card-soft); color: var(--ink); border: 1px solid var(--line);
+      border-radius: var(--radius-sm); padding: 6px 10px; font-size: 0.9em; min-height: 40px;
     }
-    .chat-session-id { font-family: monospace; font-size: 0.7rem; color: #666; margin-top: 0.4rem; }
+    .chat-session-id { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); margin-top: 0.4rem; }
+    .chat-trace { align-self: flex-start; max-width: 100%; margin: -0.2rem 0 0.2rem; }
+    .chat-trace-btn { background: none; border: none; color: var(--muted); font-family: var(--mono); font-size: 0.7rem; cursor: pointer; padding: 0 0 0 0.2rem; min-height: 0; }
+    .chat-trace-btn:hover { color: var(--accent); }
+    .chat-trace-body { margin: 2px 0 0 0.4rem; border-left: 1px solid var(--line); padding-left: 0.5rem; }
+    .ctrace-row { display: flex; align-items: center; gap: 0.35rem; font-family: var(--mono); font-size: 0.72rem; color: var(--muted); padding: 1px 0; }
+    .ctrace-row .chip-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+    .ctrace-row code { color: var(--accent); }
+    .ctrace-det { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     /* Timeline view */
     .trace {
-      border: 1px solid #555; border-radius: 8px; margin-bottom: 0.8rem; background: #2c2c2c;
+      border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 0.8rem; background: var(--card); box-shadow: var(--shadow);
     }
     .trace > summary {
       cursor: pointer; padding: 0.7rem 0.9rem; list-style: none;
       display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
     }
     .trace > summary::-webkit-details-marker { display: none; }
-    .trace > summary::before { content: '▶'; color: #888; font-size: 0.75em; }
+    .trace > summary::before { content: '▶'; color: var(--muted); font-size: 0.75em; }
     .trace[open] > summary::before { content: '▼'; }
-    .trace-session { color: #f44336; font-weight: bold; font-family: monospace; }
-    .trace-summary { color: #ccc; flex: 1 1 auto; }
-    .trace-count { color: #888; font-size: 0.8em; }
+    .trace-session { color: var(--accent); font-weight: bold; font-family: var(--mono); }
+    .trace-summary { color: var(--ink); flex: 1 1 auto; }
+    .trace-count { color: var(--muted); font-size: 0.8em; }
     .trace-body { padding: 0 0.9rem 0.7rem 0.9rem; }
-    .trace-step {
-      display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.35rem 0;
-      border-top: 1px solid #3a3a3a;
+    /* ─── the "now" readout: what the assistant is doing, inferred live ──────
+     * The instrument needle. One line, updated from the latest classified
+     * traffic, announced politely to assistive tech. */
+    .now {
+      display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
+      margin-bottom: 0.7rem; padding: 0.4rem 0.8rem;
+      background: var(--card); border: 1px solid var(--line);
+      border-left: 3px solid var(--muted); border-radius: var(--radius); box-shadow: var(--shadow);
     }
-    .trace-step:first-child { border-top: none; }
-    .badge {
-      display: inline-block; min-width: 70px; text-align: center; font-size: 0.7rem;
-      font-weight: bold; padding: 2px 6px; border-radius: 10px; color: #fff; flex-shrink: 0;
+    .now .now-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: 0 0 auto; }
+    .now .now-label { font-weight: 700; color: var(--ink); }
+    .now .now-detail { color: var(--muted); font-family: var(--mono); font-size: 0.82em; min-width: 0; }
+    /* The now-state hues match the category left-edge colors on the log rows
+     * (hearing=utterance, thinking=skill, speaking=output) on purpose, so the
+     * readout and the stream read as one system; same fixed-hue exception as
+     * the category swatches, legible on both the light and dark --card. */
+    .now.live     { border-left-color: var(--ok); }  .now.live .now-dot     { background: var(--ok); }
+    .now.hearing  { border-left-color: #1565c0; }     .now.hearing .now-dot  { background: #1565c0; }
+    .now.thinking { border-left-color: #6a1b9a; }     .now.thinking .now-dot { background: #6a1b9a; }
+    .now.speaking { border-left-color: #ef6c00; }     .now.speaking .now-dot { background: #ef6c00; }
+    .now.error    { border-left-color: var(--bad); }  .now.error .now-dot    { background: var(--bad); }
+
+    /* ─── grouped control panel ──────────────────────────────────────────────*/
+    .group { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); padding: 0.7rem 0.9rem; margin-bottom: 0.7rem; }
+    .group-label { font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 700; margin: 0 0 0.5rem; display: flex; align-items: center; gap: 0.4rem; }
+    .group-label::before { content: ''; width: 3px; height: 0.85rem; background: var(--accent-strong); border-radius: 2px; }
+    .field { display: flex; flex-direction: column; gap: 0.2rem; flex: 1 1 200px; max-width: 300px; }
+    .field > span { font-size: 0.72rem; color: var(--muted); font-weight: 600; }
+    .field .input { max-width: none; }
+    details.more > summary, details.buffer > summary { cursor: pointer; color: var(--muted); font-size: 0.82rem; margin-top: 0.3rem; }
+
+    /* Quick-filter chips: read the stream by kind, no glob syntax needed. */
+    .chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.6rem; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer;
+      padding: 0.3rem 0.7rem; min-height: 34px; border-radius: 999px; font-size: 0.82rem; font-weight: 600;
+      background: var(--card-soft); color: var(--ink); border: 1px solid var(--line);
     }
-    .badge.utterance { background: #2e7d32; }
-    .badge.pipeline   { background: #1565c0; }
-    .badge.skill      { background: #6a1b9a; }
-    .badge.output     { background: #ef6c00; }
-    .badge.other      { background: #555; }
-    .trace-step .msg { flex: 1 1 auto; margin-bottom: 0; }
-    footer { margin-top: 1rem; background-color: #222; padding: 1rem; border-radius: 8px; text-align: center; }
-    footer p { color: #fff; margin: 0; }
+    .chip:hover { border-color: var(--accent); color: var(--accent); }
+    .chip.active { background: var(--accent-wash); border-color: var(--accent); color: var(--accent); }
+    .chip .chip-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+    .chip .count { font-family: var(--mono); font-size: 0.72rem; color: var(--muted); }
+    .chip.active .count { color: var(--accent); }
+    .chip.chip-error.active { background: color-mix(in srgb, var(--bad) 14%, transparent); border-color: var(--bad); color: var(--bad); }
+    .chip.chip-error.active .count { color: var(--bad); }
+
+    /* Category color swatch, used only by the small chip dots (the log rows use
+     * the same hues as a left border, defined in the dense-log block below). */
+    .chip-dot.cat-utterance { background: #1565c0; }
+    .chip-dot.cat-pipeline  { background: #00838f; }
+    .chip-dot.cat-skill     { background: #6a1b9a; }
+    .chip-dot.cat-output    { background: #ef6c00; }
+    .chip-dot.cat-error     { background: var(--bad); }
+    .chip-dot.cat-other     { background: var(--muted); }
+
+    .legend { display: flex; flex-wrap: wrap; gap: 0.3rem 0.9rem; font-size: 0.72rem; color: var(--muted); margin: 0.2rem 0 0.6rem; }
+    .legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+    .legend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+    /* Empty / first-run state: an invitation to act, not a dead end. */
+    .empty { text-align: center; padding: 2.4rem 1.2rem; border: 1px dashed var(--line); border-radius: var(--radius); background: var(--card); color: var(--muted); }
+    .empty h3 { margin: 0 0 0.5rem; color: var(--ink); font-size: 1.05rem; }
+    .empty p { margin: 0.3rem auto; max-width: 34rem; }
+    .empty code { background: var(--card-soft); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 1px 6px; font-family: var(--mono); color: var(--accent); }
+    .empty a { color: var(--accent); }
+
+    /* Cross-link / hint microcopy inside panels. */
+    .hint-link { font-size: 0.8rem; color: var(--muted); margin-top: 0.5rem; }
+    .hint-link a { color: var(--accent); }
+    .inject-panel { border-left: 3px solid var(--warn); }
+    .inject-panel summary { color: var(--warn); font-weight: 600; }
+    .inline-label { color: var(--muted); font-size: 0.85rem; align-self: center; }
+    .inject-status.ok  { color: var(--ok); }
+    .inject-status.err { color: var(--bad); }
+    .bus-banner { background: color-mix(in srgb, var(--bad) 14%, var(--card)); border: 1px solid var(--bad); color: var(--bad); border-radius: var(--radius); padding: 0.7rem 1rem; margin-bottom: 0.8rem; text-align: left; font-size: 0.9rem; font-weight: 600; }
+    .session-panel { background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--accent-strong); border-radius: var(--radius); padding: 0.8rem 1rem; margin-bottom: 0.8rem; text-align: left; box-shadow: var(--shadow); }
+    .session-panel > summary { cursor: pointer; color: var(--ink); font-weight: 600; font-size: 0.9rem; }
+    .session-panel textarea { background: var(--card-soft); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px; font-family: var(--mono); font-size: 0.85rem; width: 100%; min-height: 70px; resize: vertical; margin-top: 0.4rem; }
+
+    /* ─── responsive: below 640px, tuck filters/data behind their panels ─────*/
+    @media (max-width: 640px) {
+      body { padding: 0.6rem; }
+      .header h1 { font-size: 1.05rem; }
+      .wave { max-width: 5rem; }
+      .field { max-width: none; }
+      .btn { flex: 1 1 auto; }
+      .now .now-detail { font-size: 0.82em; }
+      .layout { flex-wrap: wrap; }
+      .chat-panel { flex-basis: 100%; max-width: none; }
+    }
+
+    /* ─── DevTools-style dense log ───────────────────────────────────────────*/
+    .toolbar { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 8px; margin-bottom: 0.7rem; box-shadow: var(--shadow); }
+    .tbar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+    .tbar.filt { margin-top: 6px; }
+    .tspacer { flex: 1 1 auto; }
+    .btn.sm { min-height: 32px; padding: 0.3rem 0.6rem; font-size: 0.8rem; margin: 0; }
+    .input.sm { min-height: 32px; padding: 5px 9px; font-size: 0.82rem; font-family: var(--mono); min-width: 110px; max-width: none; flex: 1 1 130px; }
+    #filter { flex: 2 1 220px; }
+    .chip { padding: 0.22rem 0.6rem; min-height: 30px; font-size: 0.78rem; gap: 0.3rem; }
+    .chip.noise { color: var(--muted); font-family: var(--mono); }
+    .chip.noise.active { background: var(--accent-wash); border-color: var(--accent); color: var(--accent); }
+    .tools { position: relative; }
+    .tools > summary { list-style: none; }
+    .tools > summary::-webkit-details-marker { display: none; }
+    .tools-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: var(--shadow); padding: 8px; display: flex; flex-direction: column; gap: 7px; min-width: 230px; align-items: stretch; }
+    .active-filters { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+    .ftag { font-family: var(--mono); font-size: 0.74rem; background: var(--accent-wash); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line)); border-radius: 999px; padding: 1px 3px 1px 9px; display: inline-flex; align-items: center; gap: 3px; }
+    .ftag button { border: none; background: none; color: var(--accent); cursor: pointer; font-size: 0.95rem; line-height: 1; padding: 0 3px; min-height: 0; }
+
+    .logtbl { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); overflow: hidden; }
+    .lrow { border-left: 3px solid var(--line); }
+    .lrow + .lrow { border-top: 1px solid var(--line); }
+    .lrow.cat-utterance { border-left-color: #1565c0; }
+    .lrow.cat-pipeline  { border-left-color: #00838f; }
+    .lrow.cat-skill     { border-left-color: #6a1b9a; }
+    .lrow.cat-output    { border-left-color: #ef6c00; }
+    .lrow.cat-error     { border-left-color: var(--bad); }
+    .lrow.cat-other     { border-left-color: var(--line); }
+    .lhead { display: flex; align-items: center; gap: 0.55rem; padding: 3px 10px; font-family: var(--mono); font-size: 0.82rem; line-height: 1.5; cursor: pointer; white-space: nowrap; }
+    .lhead:hover { background: var(--card-soft); }
+    .lhead:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .lrow.open > .lhead { background: var(--card-soft); }
+    .lt { color: var(--muted); flex: 0 0 auto; font-size: 0.76rem; }
+    .lty {
+      color: var(--accent); font-weight: 600; cursor: pointer; flex: 0 0 auto;
+      min-width: 16ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .lty:hover { text-decoration: underline; }
+    .lx { color: var(--muted); background: var(--card-soft); border: 1px solid var(--line); border-radius: 6px; padding: 0 5px; font-size: 0.7rem; flex: 0 0 auto; }
+    .ld { color: var(--ink); opacity: 0.82; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .lsess, .lroute { color: var(--muted); cursor: pointer; flex: 0 0 auto; font-size: 0.76rem; }
+    .lsess:hover, .lroute:hover { color: var(--accent); text-decoration: underline; }
+    .lrow.error .lty { color: var(--bad); }
+    /* On touch/coarse pointers, give the click-to-filter fields a 24px hit
+       target (WCAG 2.5.8) so tapping a session/source to trace it is reliable. */
+    @media (pointer: coarse) {
+      .lty, .lsess, .lroute { min-height: 24px; display: inline-flex; align-items: center; }
+    }
+    .lrow.error { background: color-mix(in srgb, var(--bad) 5%, transparent); }
+    .lbody { padding: 8px 12px 12px 16px; background: var(--card-soft); border-top: 1px solid var(--line); }
+    .lbody-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+    .copyb { min-height: 0; padding: 0.15rem 0.55rem; font-size: 0.72rem; margin: 0; }
+
+    @media (max-width: 640px) {
+      .lhead { flex-wrap: wrap; white-space: normal; }
+      .input.sm, #filter { flex: 1 1 100%; max-width: none; }
+      .tools-menu { right: auto; left: 0; }
+    }
+
+    /* ─── footer / about ─────────────────────────────────────────────────────*/
+    footer { margin-top: 1.4rem; background: var(--card); border: 1px solid var(--line); padding: 1.4rem; border-radius: var(--radius); box-shadow: var(--shadow); }
+    footer p { color: var(--ink); margin: 0 0 0.7rem; }
+    footer .about { max-width: 46rem; margin: 0 auto; text-align: left; }
+    footer .about h2 { font-size: 1.1rem; font-weight: 700; margin: 0 0 0.5rem; color: var(--ink); }
+    footer .about .lede { color: var(--muted); }
+    footer .about a { color: var(--accent); }
+    footer .about .fine { font-size: 0.85rem; color: var(--muted); }
+    footer .about .funding-img { max-width: 320px; width: 100%; height: auto; margin: 0.6rem 0; }
+    footer .about hr { border: none; border-top: 1px solid var(--line); margin: 1rem 0; }
+    footer .foot-actions { text-align: center; margin-top: 0.4rem; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
   </style>
 </head>
 <body>
@@ -156,7 +443,16 @@
       <span id="transport-badge" class="transport-badge">connecting…</span>
     </h1>
   </div>
+  <div class="wave" id="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch between light and dark theme" title="Toggle light / dark theme">◐</button>
 </header>
+
+<!-- Live "now" readout: assistant state inferred from the latest traffic. -->
+<div class="now" id="now" role="status" aria-live="polite">
+  <span class="now-dot" id="now-dot"></span>
+  <span class="now-label" id="now-label">Waiting for the bus…</span>
+  <span class="now-detail" id="now-detail" aria-hidden="true"></span>
+</div>
 
 <!-- Connection Config (Mode 1 only — hidden when served by FastAPI) -->
 <details class="config-panel" id="ws-config-panel">
@@ -169,82 +465,235 @@
   </div>
 </details>
 
-<div class="controls">
-  <div class="row">
-    <input type="text" id="filter"        class="input" placeholder="Filter by type (glob, e.g. ovos.*)">
-    <input type="text" id="search"        class="input" placeholder="Search content">
-    <input type="text" id="session_filter" class="input" placeholder="Filter by session_id">
-    <input type="text" id="source_filter" class="input" placeholder="Filter by source">
-    <input type="text" id="dest_filter"   class="input" placeholder="Filter by destination">
-    <select id="sort" class="input">
-      <option value="desc">Newest First</option>
-      <option value="asc">Oldest First</option>
-    </select>
+<main>
+<!-- Bus-down banner: assistant messagebus unreachable from the service (SSE mode). -->
+<div class="bus-banner" id="bus-banner" role="alert" style="display:none"></div>
+<div class="toolbar">
+  <div class="tbar">
+    <div class="chips" id="quick-chips">
+      <button class="chip active" data-cat="all"       onclick="setQuickFilter('all')">all <span class="count" id="cnt-all">0</span></button>
+      <button class="chip" data-cat="utterance" onclick="setQuickFilter('utterance')"><span class="chip-dot cat-utterance"></span>heard <span class="count" id="cnt-utterance">0</span></button>
+      <button class="chip" data-cat="pipeline"  onclick="setQuickFilter('pipeline')"><span class="chip-dot cat-pipeline"></span>intents <span class="count" id="cnt-pipeline">0</span></button>
+      <button class="chip" data-cat="skill"     onclick="setQuickFilter('skill')"><span class="chip-dot cat-skill"></span>skills <span class="count" id="cnt-skill">0</span></button>
+      <button class="chip" data-cat="output"    onclick="setQuickFilter('output')"><span class="chip-dot cat-output"></span>speech <span class="count" id="cnt-output">0</span></button>
+      <button class="chip chip-error" data-cat="error" onclick="setQuickFilter('error')"><span class="chip-dot cat-error"></span>errors <span class="count" id="cnt-error">0</span></button>
+      <button class="chip noise" id="noise-btn" onclick="toggleNoise()" title="High-frequency plumbing (sensors, syncs, animations) hidden by default">Show noise (0)</button>
+    </div>
+    <span class="tspacer"></span>
+    <button class="btn secondary sm" id="pause-btn" onclick="togglePause()">⏸ Pause</button>
+    <button class="btn secondary sm" id="view-btn" onclick="toggleView()" title="Group messages by session for tracing one interaction">🗂 Group by session</button>
+    <button class="btn secondary sm" id="chat-btn" onclick="toggleChat()" aria-controls="chat-panel">💬 Chat</button>
+    <details class="tools">
+      <summary class="btn secondary sm">⋯ Tools ▾</summary>
+      <div class="tools-menu">
+        <button class="btn secondary sm" onclick="exportJSONL()" title="One message per line">⬇ Export JSONL</button>
+        <button class="btn secondary sm" onclick="exportJSON()" title="One JSON array">⬇ Export JSON</button>
+        <button class="btn secondary sm" onclick="downloadStandalone()" title="Save this page as a local file">⬇ Save offline copy</button>
+        <button class="btn danger sm" onclick="clearBuffer()">🗑 Clear buffer</button>
+        <label class="inline-label"><input type="checkbox" id="pause-on-match"> Pause on filter match</label>
+        <label class="inline-label">Keep <input type="number" id="buffer-size" class="input sm" value="5000" min="100" step="100" style="width:82px;"> msgs</label>
+      </div>
+    </details>
   </div>
-  <div>
-    <button class="btn" id="view-btn" onclick="toggleView()">🗂 Timeline view</button>
-    <button class="btn" id="chat-btn" onclick="toggleChat()">💬 Chat</button>
-    <button class="btn" id="pause-btn" onclick="togglePause()">⏸ Pause</button>
-    <button class="btn" onclick="clearBuffer()">🗑 Clear</button>
-    <button class="btn" onclick="exportJSONL()">⬇ Export JSONL</button>
-    <button class="btn" onclick="exportJSON()">⬇ Export JSON</button>
-    <button class="btn" onclick="downloadStandalone()" title="Save this page as a local HTML file — use it when the browser blocks ws:// connections from https pages">⬇ Standalone HTML</button>
+  <div class="tbar filt">
+    <input type="text" id="filter"         class="input sm" aria-label="Filter by message type (glob)" placeholder="type glob — e.g. ovos.* or speak">
+    <input type="text" id="search"         class="input sm" aria-label="Search message content" placeholder="search content">
+    <input type="text" id="session_filter" class="input sm" aria-label="Filter by session" placeholder="session">
+    <input type="text" id="source_filter"  class="input sm" aria-label="Filter by source" placeholder="source">
+    <input type="text" id="dest_filter"    class="input sm" aria-label="Filter by destination" placeholder="destination">
+    <select id="sort" class="input sm" aria-label="Sort order"><option value="desc">newest</option><option value="asc">oldest</option></select>
+    <button class="btn secondary sm" onclick="clearFilters()">Clear</button>
   </div>
-  <div class="row" style="margin-top:0.4rem;">
-    <label style="color:#aaa;font-size:0.85rem;align-self:center;">
-      Buffer size:
-      <input type="number" id="buffer-size" class="input" value="5000" min="100" step="100"
-             style="width:100px;flex:none;display:inline-block;" title="Max messages kept client-side; oldest are dropped">
-    </label>
-    <label style="color:#aaa;font-size:0.85rem;align-self:center;">
-      <input type="checkbox" id="pause-on-match"> Pause on filter match
-    </label>
-  </div>
+  <div class="active-filters" id="active-filters" style="display:none"></div>
 </div>
 
 <!-- Inject panel -->
 <details class="inject-panel">
-  <summary>Inject message onto the bus (power tool — use with care)</summary>
+  <summary>⚡ Inject a message onto the bus (power tool — use with care)</summary>
+  <p class="hint-link"><code>type</code> / <code>data</code> / <code>context</code> mirror the OVOS message envelope — see the
+    <a href="https://openvoiceos.github.io/ovos-technical-manual/" target="_blank" rel="noopener">Technical manual</a>.
+    For a normal conversation instead of one raw message, use <a href="#" onclick="toggleChat();return false;">Chat →</a></p>
   <div class="row" style="margin-top:0.5rem;">
+    <select id="inject-preset" class="input sm" style="flex:0 1 190px;" onchange="applyPreset(this.value); this.value='';" aria-label="Inject message preset" title="Fill a common message type">
+      <option value="">Preset…</option>
+      <option value="speak">speak</option>
+      <option value="recognizer_loop:utterance">recognizer_loop:utterance</option>
+      <option value="mycroft.mic.listen">mycroft.mic.listen</option>
+      <option value="mycroft.mic.mute">mycroft.mic.mute</option>
+      <option value="mycroft.stop">mycroft.stop</option>
+      <option value="ovos.session.update">ovos.session.update</option>
+    </select>
     <input type="text" id="inject-type" class="input" placeholder="Message type (e.g. speak)" style="flex:0 1 240px;">
-    <label style="color:#aaa;font-size:0.85rem;align-self:center;">Payload JSON (data):</label>
+    <label class="inline-label">Payload JSON (data):</label>
   </div>
-  <textarea id="inject-payload">{}</textarea>
+  <textarea id="inject-payload" aria-label="Inject payload JSON (data)">{}</textarea>
   <div class="row" style="margin-top:0.5rem;">
-    <label style="color:#aaa;font-size:0.85rem;align-self:center;">Context JSON (optional):</label>
+    <label class="inline-label">Context JSON (optional):</label>
   </div>
-  <textarea id="inject-context">{}</textarea>
-  <div>
+  <textarea id="inject-context" aria-label="Inject context JSON (optional)">{}</textarea>
+  <div class="row" style="margin-top:0.5rem;">
+    <label class="inline-label"><input type="checkbox" id="inject-attach-session"> attach the Session below</label>
     <button class="btn danger" onclick="injectMessage()">⚡ Send message</button>
     <span id="inject-status" class="inject-status"></span>
   </div>
 </details>
 
+<!-- Session editor: build the OVOS Session declared per-message. -->
+<details class="session-panel">
+  <summary>🧩 Session — declare the session attached to injects &amp; chat</summary>
+  <p class="hint-link">OVOS sessions travel per message; the client declares them. Build one here to test how the
+    core behaves under a given session. Click a <code>session=</code> value in a row, or use <b>Load session</b> on
+    an expanded row, to seed this from live traffic.</p>
+  <div class="row" style="margin-top:0.5rem;">
+    <label class="field" style="flex:1 1 150px;"><span>session_id</span><input type="text" id="sess-id" class="input sm"></label>
+    <label class="field" style="flex:1 1 120px;"><span>lang</span>
+      <select id="sess-lang" class="input sm" aria-label="Session language">
+        <option value="">(default)</option>
+        <option>en-US</option><option>en-GB</option><option>pt-PT</option><option>pt-BR</option>
+        <option>es-ES</option><option>de-DE</option><option>fr-FR</option><option>it-IT</option>
+        <option>nl-NL</option><option>ca-ES</option><option>gl-ES</option><option>eu-ES</option>
+      </select>
+    </label>
+    <label class="field" style="flex:1 1 130px;"><span>site_id</span><input type="text" id="sess-site" class="input sm" placeholder="e.g. kitchen"></label>
+    <label class="field" style="flex:1 1 120px;"><span>system_unit</span>
+      <select id="sess-unit" class="input sm" aria-label="Session system unit"><option value="">(default)</option><option>metric</option><option>imperial</option></select>
+    </label>
+  </div>
+  <div class="row" style="margin-top:0.5rem;">
+    <label class="field" style="flex:1 1 100%;"><span>pipeline — comma-separated matcher ids, blank = core default</span>
+      <input type="text" id="sess-pipeline" class="input sm" placeholder="e.g. stop_high, padatious_high, fallback_low"></label>
+  </div>
+  <details class="more"><summary>Advanced — merge raw session JSON</summary>
+    <textarea id="sess-advanced" aria-label="Advanced: raw session JSON merged over the fields above" placeholder="{}"></textarea>
+  </details>
+  <div style="margin-top:0.5rem;">
+    <button class="btn secondary sm" onclick="clearSession()">Clear</button>
+    <span class="inline-label" id="sess-status"></span>
+  </div>
+</details>
+
 <div class="layout">
   <div class="container">
-    <div class="status-bar" id="status-bar">No messages yet.</div>
-    <div id="log"></div>
+    <div class="status-bar" id="status-bar" role="status" aria-live="off">Waiting for the bus…</div>
+    <div id="log" class="logtbl" role="log" aria-label="Message stream"></div>
   </div>
 
   <!-- Chat panel: converse with the assistant over one stable Session. -->
-  <div class="chat-panel" id="chat-panel">
-    <h2>💬 Chat</h2>
-    <div class="chat-hint">Requires service mode (SSE) — sends via the authenticated <code>/api/chat</code> endpoint.</div>
+  <div class="chat-panel" id="chat-panel" role="region" aria-labelledby="chat-panel-title">
+    <h2 id="chat-panel-title">💬 Chat</h2>
+    <div class="chat-hint">Requires service mode (SSE). Chats under the <b>Session</b> above when it is filled; expand <b>trace</b> under a turn to see the bus events it produced.</div>
     <div class="chat-log" id="chat-log"></div>
     <div class="chat-input-row">
       <input type="text" id="chat-input" placeholder="Type a message…" autocomplete="off">
-      <button class="btn" onclick="sendChat()">Send</button>
+      <button class="btn" id="chat-send-btn" onclick="sendChat()">Send</button>
     </div>
+    <div class="chat-hint" id="chat-disabled-note" style="display:none">Requires service (SSE) mode — this page is in direct WebSocket mode.</div>
     <div class="chat-session-id">session: <span id="chat-session-id-label"></span></div>
   </div>
 </div>
+</main>
 
 <footer>
-  <p>&copy; 2025 TigreGóticoLda.</p>
-  <button class="btn" onclick="window.open('https://github.com/TigreGotico/ovos-busmon/issues','_blank')">Report Issue</button>
+  <div class="about">
+    <h2>About ovos-busmon</h2>
+    <p class="lede">A live monitor for the OpenVoiceOS message bus — watch, filter, trace, and inject
+      bus messages in real time to see what your assistant is doing.</p>
+    <p>Developed by <a href="https://tigregotico.pt">TigreGotico</a> for
+      <a href="https://openvoiceos.org">OpenVoiceOS</a>.</p>
+    <p class="fine">Made with the help of AI.</p>
+    <hr>
+    <p><a href="https://nlnet.nl/project/OpenVoiceOS"><img class="funding-img"
+      src="nlnet-ngi0.png" alt="NGI0 Commons Fund" width="517" height="91"></a></p>
+    <p class="fine">Funded by the <a href="https://nlnet.nl/project/OpenVoiceOS">NGI0 Commons Fund</a> /
+      <a href="https://nlnet.nl">NLnet</a> under grant agreement No
+      <a href="https://cordis.europa.eu/project/id/101135429">101135429</a>, through the European
+      Commission's <a href="https://ngi.eu">Next Generation Internet</a> programme.</p>
+    <p class="fine">Licensed MIT &middot;
+      <a href="https://github.com/OpenVoiceOS/ovos-busmon">Source</a> &middot;
+      <a href="https://openvoiceos.github.io/ovos-technical-manual/">Technical manual</a></p>
+  </div>
+  <div class="foot-actions">
+    <button class="btn secondary" onclick="window.open('https://github.com/OpenVoiceOS/ovos-busmon/issues','_blank')">Report Issue</button>
+  </div>
 </footer>
 
 <script>
+// ─── Theme toggle ─────────────────────────────────────────────────────────────
+// Default (no stored choice) follows the OS via the CSS media query. An explicit
+// choice sets data-theme on <html> and persists in localStorage.
+(function () {
+  const KEY = 'busmon-theme';
+  const root = document.documentElement;
+  try {
+    const saved = localStorage.getItem(KEY);
+    if (saved === 'light' || saved === 'dark') root.setAttribute('data-theme', saved);
+  } catch (e) { /* storage unavailable */ }
+  function current() {
+    const attr = root.getAttribute('data-theme');
+    if (attr === 'light' || attr === 'dark') return attr;
+    return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  }
+  window.toggleTheme = function () {
+    const next = current() === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem(KEY, next); } catch (e) {}
+  };
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.addEventListener('click', window.toggleTheme);
+})();
+
+// ─── Live-traffic waveform ────────────────────────────────────────────────────
+// The header waveform means "the bus is talking": it animates while messages are
+// arriving and settles calm after a short idle. A flat red line marks a down
+// transport. pulseWave() is called on every incoming message; setWaveDown()
+// on transport failure.
+let _waveIdleTimer = null;
+function pulseWave() {
+  const w = document.getElementById('wave');
+  if (!w) return;
+  w.classList.remove('flat');
+  w.classList.add('running');
+  if (_waveIdleTimer) clearTimeout(_waveIdleTimer);
+  _waveIdleTimer = setTimeout(() => w.classList.remove('running'), 1600);
+}
+function setWaveDown() {
+  const w = document.getElementById('wave');
+  if (!w) return;
+  if (_waveIdleTimer) { clearTimeout(_waveIdleTimer); _waveIdleTimer = null; }
+  w.classList.remove('running');
+  w.classList.add('flat');
+}
+function setWaveLive() {
+  const w = document.getElementById('wave');
+  if (w) w.classList.remove('flat');
+}
+
+// ─── Auth token ───────────────────────────────────────────────────────────────
+// Optional shared secret for the service-mode API. Read once from ?token= and
+// kept in localStorage so it survives navigation. It travels as an
+// Authorization header on fetches and as ?token= on the SSE EventSource URL
+// (EventSource cannot set headers), so authentication and the live UI coexist.
+const AUTH_TOKEN = (function () {
+  try {
+    const u = new URLSearchParams(location.search).get('token');
+    if (u) localStorage.setItem('busmon_token', u);
+    return u || localStorage.getItem('busmon_token') || '';
+  } catch (e) { return ''; }
+})();
+function authFetch(url, opts) {
+  opts = opts || {};
+  if (AUTH_TOKEN) {
+    const h = new Headers(opts.headers || {});
+    h.set('Authorization', 'Bearer ' + AUTH_TOKEN);
+    opts = Object.assign({}, opts, { headers: h });
+  }
+  return fetch(url, opts);
+}
+function withToken(url) {
+  if (!AUTH_TOKEN) return url;
+  return url + (url.indexOf('?') === -1 ? '?' : '&') + 'token=' + encodeURIComponent(AUTH_TOKEN);
+}
+
 // ─── State ────────────────────────────────────────────────────────────────────
 const DEFAULT_MAX_BUFFER = 5000;
 let messages = [];
@@ -252,6 +701,22 @@ let paused = false;
 let nextId = 0;
 let viewMode = 'flat'; // 'flat' | 'timeline'
 let droppedCount = 0;
+// Memoization for classifyMessage/isNoise lives off-object so exported/copied
+// raw bus messages never carry synthetic fields (see classifyMessage/isNoise).
+const _catCache = new WeakMap();
+const _coalKeyCache = new WeakMap();
+// Two rows coalesce into one ×N line only when they are true duplicates: same
+// type AND same session AND same data. Keying on type alone would silently hide
+// distinct messages (different utterances or sessions) behind one row.
+function coalKey(m) {
+  if (m && typeof m === 'object' && _coalKeyCache.has(m)) return _coalKeyCache.get(m);
+  const k = String((m && m.type) || '') + '\x00' + String((m && m.session) || '')
+    + '\x00' + String((m && m.source) || '') + '\x00' + String((m && m.destination) || '')
+    + '\x00' + ((m && m.data !== undefined) ? JSON.stringify(m.data) : '');
+  if (m && typeof m === 'object') _coalKeyCache.set(m, k);
+  return k;
+}
+const _noiseCache = new WeakMap();
 
 // Tiny vendored JSON syntax highlighter (regex tokenizer over
 // JSON.stringify output) — replaces the Prism.js CDN dependency so the UI
@@ -310,11 +775,16 @@ function maxBuffer() {
 // a GitHub-Pages-hosted copy of this page is also https+hostname but has no
 // /api endpoints, so only a live /api/status answer selects service mode.
 let transportMode = 'ws';
+// Set when the transport is confirmed down or the token was rejected, so the
+// empty-state can point at the real problem instead of the first-run invitation.
+// Cleared the moment the transport reports open/connected again.
+let transportError = null;
 
 async function detectTransport() {
   try {
-    const r = await fetch('api/status', {signal: AbortSignal.timeout(1500)});
+    const r = await authFetch('api/status', {signal: AbortSignal.timeout(1500)});
     if (r.ok) return 'sse';
+    if (r.status === 401) return 'auth';
   } catch (e) { /* no service behind this origin */ }
   return 'ws';
 }
@@ -330,13 +800,48 @@ function setBadge(mode, text) {
 // ─── MODE 2: SSE transport ────────────────────────────────────────────────────
 let _sseLastId = 0;
 let _sseSource = null;
+let _sseGen = 0;
+
+// ── Assistant-bus reachability banner (service mode only) ────────────────────
+// DISTINCT from the transport badge: the badge reflects browser↔service (SSE),
+// this banner reflects service↔assistant messagebus (from /api/status).
+let _busStatusTimer = null;
+function setBusBanner(connected, host, port) {
+  const el = document.getElementById('bus-banner');
+  if (!el) return;
+  if (connected) {
+    el.style.display = 'none';
+    el.textContent = '';
+  } else {
+    const where = (host != null && port != null) ? ` at ${host}:${port}` : '';
+    el.textContent = `⚠ Assistant bus not reachable${where} — the service is retrying. Injects and chat will fail until it reconnects.`;
+    el.style.display = '';
+  }
+}
+async function pollBusStatus() {
+  try {
+    const r = await authFetch('api/status', {signal: AbortSignal.timeout(1500)});
+    if (!r.ok) return;  // transport problems are the badge's job, not this banner
+    const s = await r.json();
+    if (typeof s.bus_connected === 'boolean') setBusBanner(s.bus_connected, s.bus_host, s.bus_port);
+  } catch (e) { /* leave the banner as-is; the transport badge owns SSE errors */ }
+}
+function startBusStatusPolling() {
+  if (_busStatusTimer) return;
+  pollBusStatus();
+  _busStatusTimer = setInterval(pollBusStatus, 5000);
+}
 
 function startSSE() {
   wsConfigPanel.style.display = 'none';
   setBadge('sse', 'SSE (service)');
+  startBusStatusPolling();
 
-  // Backfill from ring buffer
-  fetch('api/messages?since_id=0&limit=500')
+  // Backfill from ring buffer — honor the configured client buffer size so a
+  // reload restores as much history as the user asked to keep, not a fixed cap.
+  // Cap at the server's own /api/messages limit (10000) so a large "Keep N"
+  // does not send an out-of-range request that returns nothing.
+  authFetch('api/messages?since_id=0&limit=' + Math.min(maxBuffer(), 10000))
     .then(r => r.json())
     .then(msgs => {
       msgs.forEach(m => pushMessage(normaliseServiceMsg(m)));
@@ -348,12 +853,27 @@ function startSSE() {
 
 function connectSSE() {
   if (_sseSource) _sseSource.close();
-  _sseSource = new EventSource('api/stream');
-  _sseSource.onopen  = () => setBadge('sse', 'SSE (service)');
-  _sseSource.onerror = () => setBadge('err', 'SSE error — reconnecting…');
+  _sseSource = new EventSource(withToken('api/stream'));
+  _sseSource.onopen  = () => { _sseGen++; transportError = null; setBadge('sse', 'SSE (service)'); setWaveLive(); render(); };
+  _sseSource.onerror = () => {
+    setWaveDown();
+    // Guard against a slow status probe stomping a connection that recovered
+    // while the probe was in flight: if onopen has fired since, drop the result.
+    const gen = _sseGen;
+    authFetch('api/status', {signal: AbortSignal.timeout(1500)})
+      .then(r => {
+        if (gen !== _sseGen) return;
+        transportError = r.status === 401 ? 'auth' : 'down';
+        setBadge('err', r.status === 401 ? 'Auth failed — check token' : 'SSE error — reconnecting…');
+        render();
+      })
+      .catch(() => { if (gen !== _sseGen) return; transportError = 'down'; setBadge('err', 'SSE error — reconnecting…'); render(); });
+  };
   _sseSource.addEventListener('message', e => {
-    const msg = JSON.parse(e.data);
-    pushMessage(normaliseServiceMsg(msg));
+    try {
+      const msg = JSON.parse(e.data);
+      pushMessage(normaliseServiceMsg(msg));
+    } catch (ex) { /* ignore a malformed frame instead of freezing the stream */ }
   });
 }
 
@@ -385,11 +905,17 @@ function connectWS() {
   if (_ws) { try { _ws.close(); } catch(e) {} }
   const url = wsUrl();
   setBadge('', 'connecting to ' + url + '…');
-  _ws = new WebSocket(url);
-  _ws.onopen  = () => setBadge('ws', 'WS → ' + url);
-  _ws.onerror = () => setBadge('err', 'WS error');
-  _ws.onclose = () => { setBadge('err', 'WS closed — reconnecting in 3s…'); setTimeout(connectWS, 3000); };
-  _ws.onmessage = e => {
+  // WebSocket.close() is asynchronous: a superseded socket still fires close
+  // (and can still deliver messages) after _ws has moved on. Guard every
+  // handler on socket identity so a stale socket cannot stomp the live one's
+  // UI or schedule a spurious reconnect.
+  const sock = new WebSocket(url);
+  _ws = sock;
+  sock.onopen  = () => { if (sock !== _ws) return; transportError = null; setBadge('ws', 'WS → ' + url); setWaveLive(); render(); };
+  sock.onerror = () => { if (sock !== _ws) return; transportError = 'down'; setBadge('err', 'WS error'); setWaveDown(); render(); };
+  sock.onclose = () => { if (sock !== _ws) return; transportError = 'down'; setBadge('err', 'WS closed — reconnecting in 3s…'); setWaveDown(); render(); setTimeout(connectWS, 3000); };
+  sock.onmessage = e => {
+    if (sock !== _ws) return;
     try {
       const raw = JSON.parse(e.data);
       pushMessage(normaliseBusFrame(raw));
@@ -400,57 +926,204 @@ function connectWS() {
 function reconnectWS() { connectWS(); }
 
 function normaliseBusFrame(raw) {
-  // Raw bus frame: {type, data, context}
+  // Raw bus frame: {type, data, context}. In direct-WS mode the serialized
+  // Session rides in context.session — surface it so the Session panel and
+  // "Load session" work here too, not only in service mode.
   const ctx = raw.context || {};
+  const sess = (ctx.session && typeof ctx.session === 'object') ? ctx.session : {};
   return {
     id: ++nextId,
     timestamp: ctx.timestamp || new Date().toISOString(),
     type: raw.type || raw.msg_type || '?',
     data: raw.data || {},
     context: ctx,
-    session: ctx.session_id || null,
+    session: ctx.session_id || sess.session_id || null,
     source: ctx.source || null,
-    destination: Array.isArray(ctx.destination)
-      ? ctx.destination.join(',')
-      : (ctx.destination || null),
-    session_data: {},
+    // Keep the raw destination (array or string) so Resend reproduces it faithfully.
+    destination: ctx.destination || null,
+    session_data: sess,
   };
 }
 
+// FastAPI errors arrive as {"detail": "..."} JSON. Surface just the sentence to
+// the user instead of the raw envelope; fall back to the raw text otherwise.
+function prettyApiError(raw) {
+  if (raw == null) return '';
+  try {
+    const j = JSON.parse(raw);
+    const d = j && j.detail;
+    if (typeof d === 'string') return d;
+    if (Array.isArray(d) && d.length && d[0] && d[0].msg) return d.map(e => e.msg).join('; ');
+    if (d != null) return JSON.stringify(d);
+  } catch (e) { /* not JSON — show it verbatim */ }
+  return raw;
+}
+
 // ─── Inject ───────────────────────────────────────────────────────────────────
+// Core emit, shared by the inject panel and by row Resend/Edit-and-send.
+// The service rebroadcasts what it emits, so a sent message reappears in the
+// live stream like any other. Returns {ok, error}.
+async function sendToBus(type, data, context) {
+  if (transportMode === 'sse') {
+    const resp = await authFetch('api/send', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({type: type, data: data, context: context}),
+    });
+    return resp.ok ? {ok: true} : {ok: false, error: prettyApiError(await resp.text())};
+  }
+  if (!_ws || _ws.readyState !== WebSocket.OPEN) return {ok: false, error: 'WebSocket not connected'};
+  _ws.send(JSON.stringify({type: type, data: data, context: context}));
+  return {ok: true};
+}
+
+function setInjectStatus(kind, text) {
+  const status = document.getElementById('inject-status');
+  status.textContent = text;
+  status.className = 'inject-status' + (kind ? ' ' + kind : '');
+  if (kind === 'ok') setTimeout(() => { status.textContent = ''; status.className = 'inject-status'; }, 3000);
+}
+
 async function injectMessage() {
   const msgType = document.getElementById('inject-type').value.trim();
   const payloadStr = document.getElementById('inject-payload').value.trim();
   const contextStr = document.getElementById('inject-context').value.trim();
-  const status = document.getElementById('inject-status');
-  if (!msgType) { status.textContent = '✗ message type is required'; status.style.color='#f44'; return; }
-
+  if (!msgType) { setInjectStatus('err', '✗ message type is required'); return; }
   let payload, context;
   try { payload = JSON.parse(payloadStr || '{}'); }
-  catch(e) { status.textContent = '✗ invalid data JSON: ' + e.message; status.style.color='#f44'; return; }
+  catch(e) { setInjectStatus('err', '✗ invalid data JSON: ' + e.message); return; }
   try { context = JSON.parse(contextStr || '{}'); }
-  catch(e) { status.textContent = '✗ invalid context JSON: ' + e.message; status.style.color='#f44'; return; }
-
-  if (transportMode === 'sse') {
-    // Mode 2 — POST to API. The service's own bus listener rebroadcasts
-    // whatever it emits, so the sent message reappears in the live stream
-    // like any other — no special-casing needed here.
-    const resp = await fetch('api/send', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({type: msgType, data: payload, context: context}),
-    });
-    if (resp.ok) { status.textContent = '✓ sent'; status.style.color='#4f4'; }
-    else { status.textContent = '✗ ' + await resp.text(); status.style.color='#f44'; }
-  } else {
-    // Mode 1 — send directly on the WebSocket
-    if (!_ws || _ws.readyState !== WebSocket.OPEN) {
-      status.textContent = '✗ WebSocket not connected'; status.style.color='#f44'; return;
-    }
-    _ws.send(JSON.stringify({type: msgType, data: payload, context: context}));
-    status.textContent = '✓ sent'; status.style.color='#4f4';
+  catch(e) { setInjectStatus('err', '✗ invalid context JSON: ' + e.message); return; }
+  if (document.getElementById('inject-attach-session').checked) {
+    try { const s = buildSession(); if (Object.keys(s).length) context.session = s; }
+    catch(e) { setInjectStatus('err', '✗ ' + e.message); return; }
   }
-  setTimeout(() => status.textContent = '', 3000);
+  const r = await sendToBus(msgType, payload, context);
+  setInjectStatus(r.ok ? 'ok' : 'err', r.ok ? '✓ sent' : '✗ ' + r.error);
+}
+
+// Rebuild the original bus context of a captured message (the collector splits
+// session/source/destination out of context on the way in).
+function reconstructContext(m) {
+  const ctx = Object.assign({}, m.context || {});
+  if (m.source) ctx.source = m.source;
+  // Only a comma-joined STRING needs splitting back to a list; arrays and any
+  // other spec-legal type (a producer may put a dict/number here) pass through
+  // as-is so Resend never throws on `.indexOf`.
+  if (m.destination) {
+    ctx.destination = (typeof m.destination === 'string' && m.destination.indexOf(',') !== -1)
+      ? m.destination.split(',') : m.destination;
+  }
+  if (m.session_data && Object.keys(m.session_data).length) ctx.session = m.session_data;
+  return ctx;
+}
+function findMsg(id) { return messages.find(x => String(x.id) === String(id)); }
+
+// Resend a captured message exactly as it was seen.
+async function resendMsg(ev, id) {
+  ev.stopPropagation();
+  const btn = ev.currentTarget, o = btn.textContent;
+  const m = findMsg(id);
+  if (!m) { btn.textContent = 'Not buffered'; setTimeout(() => { btn.textContent = o; }, 1400); return; }
+  const r = await sendToBus(m.type, m.data || {}, reconstructContext(m));
+  btn.textContent = r.ok ? 'Resent ✓' : 'Failed ✗';
+  setTimeout(() => { btn.textContent = o; }, 1400);
+}
+
+// Load a captured message into the inject panel to tweak before sending.
+function editMsg(ev, id) {
+  ev.stopPropagation();
+  const m = findMsg(id);
+  if (!m) { setInjectStatus('err', 'that message is no longer buffered'); return; }
+  document.getElementById('inject-type').value = m.type;
+  document.getElementById('inject-payload').value = JSON.stringify(m.data || {}, null, 2);
+  document.getElementById('inject-context').value = JSON.stringify(reconstructContext(m), null, 2);
+  const panel = document.querySelector('.inject-panel');
+  if (panel) { panel.open = true; panel.scrollIntoView({behavior: 'smooth', block: 'center'}); }
+  setInjectStatus('', 'loaded from ' + m.type + ' — edit and Send');
+}
+
+// Inject panel presets: fill a common type + a skeleton payload.
+const INJECT_PRESETS = {
+  'speak': {type: 'speak', data: {utterance: 'hello world', lang: 'en-US'}},
+  'recognizer_loop:utterance': {type: 'recognizer_loop:utterance', data: {utterances: ['what time is it'], lang: 'en-US'}},
+  'mycroft.mic.listen': {type: 'mycroft.mic.listen', data: {}},
+  'mycroft.mic.mute': {type: 'mycroft.mic.mute', data: {}},
+  'mycroft.stop': {type: 'mycroft.stop', data: {}},
+  'ovos.session.update': {type: 'ovos.session.update', data: {}},
+};
+function applyPreset(key) {
+  const p = INJECT_PRESETS[key];
+  if (!p) return;
+  document.getElementById('inject-type').value = p.type;
+  document.getElementById('inject-payload').value = JSON.stringify(p.data, null, 2);
+}
+
+// ─── Session editor (Track A2) ────────────────────────────────────────────────
+// Builds the OVOS Session dict that travels in context["session"].
+function _v(id) { const e = document.getElementById(id); return e ? e.value.trim() : ''; }
+function buildSession() {
+  const s = {};
+  if (_v('sess-id'))   s.session_id  = _v('sess-id');
+  if (_v('sess-lang')) s.lang        = _v('sess-lang');
+  if (_v('sess-site')) s.site_id     = _v('sess-site');
+  if (_v('sess-unit')) s.system_unit = _v('sess-unit');
+  const pipe = _v('sess-pipeline').split(',').map(x => x.trim()).filter(Boolean);
+  if (pipe.length) s.pipeline = pipe;
+  const adv = _v('sess-advanced');
+  if (adv) {
+    let extra;
+    try { extra = JSON.parse(adv); }
+    catch (e) { throw new Error('Advanced session JSON: ' + e.message); }
+    Object.assign(s, extra);
+  }
+  return s;
+}
+const _SESS_KNOWN = {session_id: 'sess-id', lang: 'sess-lang', site_id: 'sess-site', system_unit: 'sess-unit'};
+function loadSessionIntoEditor(sd) {
+  if (!sd || typeof sd !== 'object') return;
+  document.getElementById('sess-id').value   = sd.session_id  || '';
+  document.getElementById('sess-lang').value = sd.lang        || '';
+  document.getElementById('sess-site').value = sd.site_id     || '';
+  document.getElementById('sess-unit').value = sd.system_unit || '';
+  document.getElementById('sess-pipeline').value = Array.isArray(sd.pipeline) ? sd.pipeline.join(', ') : '';
+  const rest = {};
+  for (const k in sd) if (!(k in _SESS_KNOWN) && k !== 'pipeline') rest[k] = sd[k];
+  document.getElementById('sess-advanced').value = Object.keys(rest).length ? JSON.stringify(rest, null, 2) : '';
+  const p = document.querySelector('.session-panel'); if (p) p.open = true;
+  const st = document.getElementById('sess-status');
+  if (st) { st.textContent = 'loaded session ' + (sd.session_id || '(anonymous)'); setTimeout(() => st.textContent = '', 3000); }
+}
+function clearSession() {
+  ['sess-id', 'sess-site', 'sess-pipeline', 'sess-advanced'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('sess-lang').value = '';
+  document.getElementById('sess-unit').value = '';
+  const st = document.getElementById('sess-status');
+  if (st) { st.textContent = 'session cleared'; st.className = 'inline-label'; }
+}
+
+// Validate the Advanced JSON as the user types/leaves the field, so a typo
+// surfaces here instead of silently breaking the next inject/chat send.
+function validateSessionAdvanced() {
+  const st = document.getElementById('sess-status');
+  if (!st) return;
+  const adv = _v('sess-advanced');
+  if (!adv) { st.textContent = ''; st.className = 'inline-label'; return; }
+  try {
+    JSON.parse(adv);
+    st.textContent = 'advanced JSON ok';
+    st.className = 'inline-label inject-status ok';
+  } catch (e) {
+    st.textContent = 'Advanced session JSON: ' + e.message;
+    st.className = 'inline-label inject-status err';
+  }
+}
+function loadRowSession(ev, id) {
+  ev.stopPropagation();
+  const m = findMsg(id);
+  if (m) { loadSessionIntoEditor(m.session_data || {}); return; }
+  const st = document.getElementById('sess-status');
+  if (st) { st.textContent = 'that message is no longer buffered'; setTimeout(() => st.textContent = '', 3000); }
 }
 
 // ─── Render ───────────────────────────────────────────────────────────────────
@@ -461,10 +1134,23 @@ function globMatch(text, pattern) {
   return re.test(text);
 }
 
+const _searchCache = new WeakMap();
+// Search only the meaningful fields, not the synthetic id/timestamp the capture
+// adds — searching "42" or "2026" should not match an internal id or a date
+// stamp the bus frame never carried. Cached per message (derived from immutable
+// fields) so typing does not re-stringify the whole buffer on every keystroke.
+function searchBlob(msg) {
+  if (msg && typeof msg === 'object' && _searchCache.has(msg)) return _searchCache.get(msg);
+  const b = JSON.stringify({
+    type: msg && msg.type, data: msg && msg.data, context: msg && msg.context,
+    session: msg && msg.session, source: msg && msg.source, destination: msg && msg.destination,
+  }).toLowerCase();
+  if (msg && typeof msg === 'object') _searchCache.set(msg, b);
+  return b;
+}
 function matchesSearch(msg, text) {
   if (!text) return true;
-  text = text.toLowerCase();
-  return JSON.stringify(msg).toLowerCase().includes(text);
+  return searchBlob(msg).includes(text.toLowerCase());
 }
 
 function filteredMessages() {
@@ -475,12 +1161,159 @@ function filteredMessages() {
   const fDst    = document.getElementById('dest_filter').value.trim().toLowerCase();
 
   return messages.filter(m =>
-    globMatch(m.type, fType) &&
+    (showNoise || fType || !isNoise(m)) &&
+    (quickCat === 'all' || classifyMessage(m) === quickCat) &&
+    globMatch(String(m.type || ''), fType) &&
     matchesSearch(m, fSearch) &&
     (!fSess || String(m.session||'').toLowerCase().includes(fSess)) &&
     (!fSrc  || String(m.source||'').toLowerCase().includes(fSrc)) &&
     (!fDst  || String(m.destination||'').toLowerCase().includes(fDst))
   );
+}
+
+// ─── Firehose control: mute high-frequency plumbing by default ───────────────
+// A real bus bursts with sensor/heartbeat/animation traffic that drowns the
+// signal. These globs are hidden until "Show noise" is on (or you filter by a
+// matching type on purpose).
+const NOISE_GLOBS = [
+  'ovos.phal.sensor', 'ovos.phal.sensor.*', '*.sync', 'enclosure.mouth.*',
+  'enclosure.eyes.*', 'ovos.phal.nm.*', 'mycroft.mic.*', 'ovos.ipc.*',
+];
+let showNoise = false;
+function isNoise(m) {
+  if (m && typeof m === 'object' && _noiseCache.has(m)) return _noiseCache.get(m);
+  const t = String((m && m.type) || '');
+  const r = NOISE_GLOBS.some(g => globMatch(t, g));
+  if (m && typeof m === 'object') _noiseCache.set(m, r);
+  return r;
+}
+function noiseCount() { return messages.reduce((n, m) => n + (isNoise(m) ? 1 : 0), 0); }
+function toggleNoise() { showNoise = !showNoise; render(); }
+
+// Collapse a run of consecutive same-type rows into one row with a ×count.
+function coalesce(list) {
+  const out = [];
+  for (const m of list) {
+    const prev = out[out.length - 1];
+    if (prev && coalKey(prev.msg) === coalKey(m)) {
+      prev.count++; prev.ids.push(m.id);
+      // The representative is always the newest (max id) member of the run, so
+      // the row's data-mid is stable whatever the sort order — otherwise an
+      // open row's id would shift on a sort/filter change and reopen() would
+      // lose it, silently collapsing the payload the user is reading.
+      if (m.id > prev.msg.id) prev.msg = m;
+    } else {
+      out.push({ msg: m, count: 1, ids: [m.id] });
+    }
+  }
+  return out;
+}
+
+// The single most useful one-line detail for a message.
+function detailOf(msg) {
+  const d = msg.data || {};
+  if (Array.isArray(d.utterances) && d.utterances.length) return String(d.utterances[0]);
+  if (typeof d.utterance === 'string') return d.utterance;
+  if (typeof d.name === 'string') return d.name;
+  if (typeof d.skill_id === 'string') return d.skill_id;
+  const keys = Object.keys(d);
+  if (!keys.length) return '';
+  return keys.slice(0, 3).map(k => {
+    const v = d[k];
+    return (v && typeof v === 'object') ? k : k + '=' + String(v);
+  }).join('  ');
+}
+
+// Attribute-safe escape (esc + quotes) for values placed in HTML attributes.
+function escA(s) { return esc(s).replace(/"/g, '&quot;'); }
+
+// Click-to-filter: toggle a field filter to this value (devs filter by
+// clicking any type / session / source / destination in the log).
+function pick(field, val) {
+  const el = document.getElementById(field);
+  if (!el) return;
+  el.value = (el.value.trim() === val) ? '' : val;
+  render();
+}
+
+function toggleRow(row) {
+  const b = row.querySelector('.lbody');
+  if (!b) return;
+  const open = b.style.display === 'block';
+  b.style.display = open ? 'none' : 'block';
+  row.classList.toggle('open', !open);
+  const head = row.querySelector('.lhead');
+  if (head) head.setAttribute('aria-expanded', open ? 'false' : 'true');
+  // Closing the last open row resumes the live view (flushes queued traffic).
+  if (open && !document.querySelector('#log .lrow.open')) render();
+}
+
+// ─── Quick-filter chips: read the stream by kind ─────────────────────────────
+let quickCat = 'all';
+function setQuickFilter(cat) {
+  quickCat = cat;
+  document.querySelectorAll('#quick-chips .chip').forEach(ch => {
+    const on = ch.dataset.cat === cat;
+    ch.classList.toggle('active', on);
+    ch.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  render();
+}
+function clearFilters() {
+  ['filter','search','session_filter','source_filter','dest_filter']
+    .forEach(id => { document.getElementById(id).value = ''; });
+  setQuickFilter('all');
+}
+function updateCounts() {
+  const c = {all: messages.length, utterance:0, pipeline:0, skill:0, output:0, error:0, other:0};
+  for (const m of messages) c[classifyMessage(m)]++;
+  for (const k of ['all','utterance','pipeline','skill','output','error']) {
+    const el = document.getElementById('cnt-' + k);
+    if (el) el.textContent = c[k];
+  }
+}
+
+// ─── "Now" readout: infer assistant state from the latest classified event ───
+function updateNow() {
+  const box = document.getElementById('now');
+  const label = document.getElementById('now-label');
+  const detail = document.getElementById('now-detail');
+  if (!box) return;
+  const last = messages[messages.length - 1];
+  box.className = 'now';
+  if (!last) { label.textContent = paused ? 'Paused' : 'Waiting for the bus…'; detail.textContent = ''; return; }
+  // The needle sticks to the last MEANINGFUL event (a turn), not the latest
+  // plumbing message — scan back for the most recent classified, non-"other".
+  let subject = last, cat = classifyMessage(last);
+  if (cat === 'other') {
+    for (let i = messages.length - 1; i >= 0 && i >= messages.length - 40; i--) {
+      const c = classifyMessage(messages[i]);
+      if (c !== 'other') { subject = messages[i]; cat = c; break; }
+    }
+  }
+  const uttOf = m => (m.data && (Array.isArray(m.data.utterances) ? m.data.utterances[0] : m.data.utterance)) || '';
+  let cls = 'live', text = 'Live', det = subject.type;
+  if (cat === 'error')          { cls = 'error';    text = "Didn't understand"; det = subject.type; }
+  else if (cat === 'utterance') { cls = 'hearing';  text = 'Heard';    det = uttOf(subject) || subject.type; }
+  else if (cat === 'output')    { cls = 'speaking'; text = 'Speaking'; det = (subject.data && subject.data.utterance) || subject.type; }
+  else if (cat === 'skill')     { cls = 'thinking'; text = 'Working';  det = (subject.data && subject.data.name) || subject.type; }
+  else if (cat === 'pipeline')  { cls = 'thinking'; text = 'Thinking'; det = subject.type; }
+  box.classList.add(cls);
+  label.textContent = paused ? text + ' (paused)' : text;
+  const bits = [subject.type];
+  if (det && det !== subject.type) bits.push('“' + det + '”');
+  if (subject.session)     bits.push('session=' + subject.session);
+  if (subject.source)      bits.push('src=' + subject.source);
+  if (subject.destination) bits.push('dst=' + subject.destination);
+  detail.textContent = bits.join('   ·   ');
+}
+function copyMsg(ev, id) {
+  ev.stopPropagation();
+  const btn = ev.currentTarget;
+  const m = messages.find(x => String(x.id) === String(id));
+  if (!m) { const o = btn.textContent; btn.textContent = 'Not buffered'; setTimeout(() => { btn.textContent = o; }, 1400); return; }
+  const restore = () => { const o = btn.textContent; btn.textContent = 'Copied ✓'; setTimeout(() => btn.textContent = o, 1200); };
+  if (navigator.clipboard) navigator.clipboard.writeText(JSON.stringify(m, null, 2)).then(restore).catch(() => {});
 }
 
 // ─── Timeline grouping (Feature: utterance timeline view) ─────────────────────
@@ -490,15 +1323,25 @@ function filteredMessages() {
 // interaction (utterance → pipeline/intent → skill handler → speak/audio)
 // renders as a single collapsible group.
 
+// A message's category and noise flag depend only on its (immutable) type, so
+// compute once and cache off-object in a WeakMap (see _catCache above) —
+// filteredMessages/updateCounts/coalesce/updateNow otherwise recompute these
+// O(n) scans 3–4x per render.
 function classifyMessage(msg) {
-  const t = (msg.type || '').toLowerCase();
-  if (t === 'recognizer_loop:utterance') return 'utterance';
-  if (t.includes('speak') || t.includes('audio') || t.includes('tts')) return 'output';
-  if (t.includes('intent') || t.startsWith('ovos.pipeline') || t.includes('padatious') ||
-      t.includes('adapt') || t.includes('common_query')) return 'pipeline';
-  if (t.startsWith('skill') || t.includes('.activate') || t.includes('mycroft.skill') ||
-      t.includes('handler')) return 'skill';
-  return 'other';
+  if (msg && typeof msg === 'object' && _catCache.has(msg)) return _catCache.get(msg);
+  const t = String((msg && msg.type) || '').toLowerCase();
+  let cat;
+  // Errors first, so 'complete_intent_failure' reads as error, not pipeline.
+  if (t.includes('error') || t.includes('failure') || t.includes('exception')) cat = 'error';
+  else if (t === 'recognizer_loop:utterance') cat = 'utterance';
+  else if (t.includes('speak') || t.includes('audio') || t.includes('tts')) cat = 'output';
+  else if (t.includes('intent') || t.startsWith('ovos.pipeline') || t.includes('padatious') ||
+      t.includes('adapt') || t.includes('common_query')) cat = 'pipeline';
+  else if (t.startsWith('skill') || t.includes('.activate') || t.includes('mycroft.skill') ||
+      t.includes('handler')) cat = 'skill';
+  else cat = 'other';
+  if (msg && typeof msg === 'object') _catCache.set(msg, cat);
+  return cat;
 }
 
 function correlationKey(msg) {
@@ -545,77 +1388,214 @@ function renderTimeline(msgs) {
       </summary>
       <div class="trace-body"></div>
     `;
-    const body = details.querySelector('.trace-body');
-    for (const msg of group) {
-      const step = document.createElement('div');
-      step.className = 'trace-step';
-      const cat = classifyMessage(msg);
-      step.innerHTML = `<span class="badge ${cat}">${cat}</span>${renderMsgHtml(msg)}`;
-      body.appendChild(step);
-    }
+    details.open = true;
+    details.querySelector('.trace-body').innerHTML = coalesce(group).map(rowHtml).join('');
     log.appendChild(details);
   }
-  highlightAllJSON();
 }
 
-function renderMsgHtml(msg) {
-  const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleString() : '';
+// One dense log row (DevTools-style). Every field value is click-to-filter.
+function rowHtml(item) {
+  const msg = item.msg;
+  const cat = classifyMessage(msg);
+  const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : '';
+  const det = detailOf(msg);
   let sections = '';
-  if (Object.keys(msg.data || {}).length) {
-    sections += msgSection(`data-${msg.id}`, 'message.data', msg.data);
-  }
-  if (Object.keys(msg.context || {}).length) {
-    sections += msgSection(`ctx-${msg.id}`, 'message.context', msg.context);
-  }
-  if (Object.keys(msg.session_data || {}).length) {
-    sections += msgSection(`sess-${msg.id}`, 'session', msg.session_data);
-  }
-  return `
-    <div class="msg">
-      <div class="msg-type">${esc(msg.type)}</div>
-      <div><span class="label">Timestamp:</span> ${esc(ts)}</div>
-      <div>
-        ${msg.session     ? `<span class="label">session_id:</span> ${esc(msg.session)} ` : ''}
-        ${msg.source      ? `<span class="label">| source:</span> ${esc(msg.source)} ` : ''}
-        ${msg.destination ? `<span class="label">| destination:</span> ${esc(msg.destination)}` : ''}
-      </div>
-      ${sections}
+  if (Object.keys(msg.data || {}).length) sections += msgSection(`data-${msg.id}`, 'message.data', msg.data);
+  if (Object.keys(msg.context || {}).length) sections += msgSection(`ctx-${msg.id}`, 'message.context', msg.context);
+  if (Object.keys(msg.session_data || {}).length) sections += msgSection(`sess-${msg.id}`, 'session', msg.session_data);
+  return `<div class="lrow cat-${cat}${cat === 'error' ? ' error' : ''}" data-mid="${msg.id}" data-ids="${item.ids.join(',')}">
+    <div class="lhead" tabindex="0" role="button" aria-expanded="false" aria-label="Expand ${escA(msg.type)}${ts ? ' at ' + escA(ts) : ''}" title="${cat} — Enter to expand">
+      <span class="lt">${esc(ts)}</span>
+      <span class="lty" data-pick="filter" data-val="${escA(msg.type)}" tabindex="0" role="button" aria-label="filter by type ${escA(msg.type)}" title="filter by this type">${esc(msg.type)}</span>
+      ${item.count > 1 ? `<span class="lx" title="${item.count} in a row">×${item.count}</span>` : ''}
+      <span class="ld">${esc(det)}</span>
+      ${msg.session ? `<span class="lsess" data-pick="session_filter" data-val="${escA(msg.session)}" tabindex="0" role="button" aria-label="filter by session ${escA(msg.session)}" title="inspect this session">${esc(msg.session)}</span>` : ''}
+      ${msg.source ? `<span class="lroute" data-pick="source_filter" data-val="${escA(msg.source)}" tabindex="0" role="button" aria-label="filter by source ${escA(msg.source)}" title="filter by source">${esc(msg.source)}</span>` : ''}
+      ${msg.destination ? `<span class="lroute" data-pick="dest_filter" data-val="${escA(msg.destination)}" tabindex="0" role="button" aria-label="filter by destination ${escA(msg.destination)}" title="filter by destination">→ ${esc(msg.destination)}</span>` : ''}
     </div>
-  `;
+    <div class="lbody" style="display:none">
+      <div class="lbody-actions">
+        <button class="btn secondary copyb" onclick="copyMsg(event, '${msg.id}')">Copy JSON</button>
+        <button class="btn secondary copyb" onclick="resendMsg(event, '${msg.id}')" title="Re-inject this exact message onto the bus">Resend</button>
+        <button class="btn secondary copyb" onclick="editMsg(event, '${msg.id}')" title="Load into the inject panel to edit before sending">Edit &amp; send</button>
+        ${(msg.session_data && Object.keys(msg.session_data).length) ? `<button class="btn secondary copyb" onclick="loadRowSession(event, '${msg.id}')" title="Load this message's session into the Session editor">Load session</button>` : ''}
+      </div>
+      ${sections || '<div class="label" style="font-size:0.78rem;">No data or context on this message.</div>'}
+    </div>
+  </div>`;
 }
 
 function toggleView() {
   viewMode = viewMode === 'flat' ? 'timeline' : 'flat';
   const btn = document.getElementById('view-btn');
-  btn.textContent = viewMode === 'timeline' ? '📄 Flat view' : '🗂 Timeline view';
-  btn.classList.toggle('pause-active', viewMode === 'timeline');
+  btn.textContent = viewMode === 'timeline' ? '📄 Flat view' : '🗂 Group by session';
+  btn.classList.toggle('active', viewMode === 'timeline');
+  btn.setAttribute('aria-pressed', viewMode === 'timeline' ? 'true' : 'false');
   render();
 }
 
-function render() {
-  const log  = document.getElementById('log');
-  const sort = document.getElementById('sort').value;
-  const msgs = filteredMessages();
-  const ordered = sort === 'asc' ? [...msgs] : [...msgs].reverse();
+const EMPTY_HTML = `<div class="empty">
+  <h3>Nothing on the bus yet</h3>
+  <p>This page shows your assistant's message bus live. Talk to your assistant — say
+     <code>hey Mycroft, what time is it</code> — and messages appear here as they happen.</p>
+  <p>New here? Read the <a href="https://github.com/OpenVoiceOS/ovos-busmon/blob/dev/docs/tutorials.md" target="_blank" rel="noopener">tutorial</a>.</p>
+</div>`;
 
-  document.getElementById('status-bar').textContent =
-    `${messages.length} captured, ${msgs.length} visible` +
-    (droppedCount ? ` (${droppedCount} dropped)` : '') +
-    (paused ? ' — PAUSED' : '');
+// Shown instead of EMPTY_HTML when the transport itself is the problem — the
+// invitation to "talk to your assistant" is misleading if nothing can arrive.
+const EMPTY_ERROR_HTML = {
+  auth: `<div class="empty">
+    <h3>Authentication failed</h3>
+    <p>The bus rejected the token on this connection. Add the correct
+       <code>?token=</code> to the URL and reload.</p>
+  </div>`,
+  down: `<div class="empty">
+    <h3>Not connected to the bus</h3>
+    <p>The transport is down — reconnecting…</p>
+  </div>`,
+};
 
-  if (viewMode === 'timeline') {
-    // Timeline groups read chronologically regardless of the sort toggle.
-    renderTimeline([...msgs]);
+function render(isLive) {
+  const log    = document.getElementById('log');
+  const status = document.getElementById('status-bar');
+  const sort   = document.getElementById('sort').value;
+  const msgs   = filteredMessages();
+
+  // Preserve which rows AND which nested sections the user has expanded, so a
+  // rebuild does not collapse the JSON they are reading. A coalesced row's
+  // representative data-mid is NOT stable when a new same-type message joins
+  // the run (the newest member becomes the representative — see coalesce()),
+  // so track the full set of member ids (data-ids) an open run had, and on
+  // rebuild reopen any row that shares ANY member id with a previously-open
+  // run, not just one whose representative id happens to match.
+  const openMids = new Set();
+  log.querySelectorAll('.lrow.open').forEach(d => {
+    const ids = (d.dataset.ids || d.dataset.mid || '').split(',').filter(Boolean);
+    ids.forEach(id => openMids.add(id));
+  });
+  const openSecs = new Set(Array.from(log.querySelectorAll('.msg-details'))
+    .filter(d => d.style.display === 'block').map(d => d.id));
+  // Preserve keyboard focus across the rebuild. Activating a filter chip or
+  // collapsing the last open row rebuilds the log, which would otherwise dump a
+  // keyboard/screen-reader user back to <body>. Record which row (by member id)
+  // and which control (the header, or a data-pick field) held focus.
+  let focusInfo = null;
+  const _ae = document.activeElement;
+  if (_ae && log.contains(_ae)) {
+    const row = _ae.closest('.lrow');
+    const ids = row ? (row.dataset.ids || row.dataset.mid || '').split(',').filter(Boolean) : [];
+    if (_ae.hasAttribute && _ae.hasAttribute('data-pick')) {
+      focusInfo = { ids, pick: _ae.getAttribute('data-pick'), val: _ae.getAttribute('data-val') };
+    } else if (_ae.classList && _ae.classList.contains('lhead')) {
+      focusInfo = { ids, head: true };
+    }
+  }
+  const reopen = () => {
+    log.querySelectorAll('.lrow').forEach(r => {
+      const ids = (r.dataset.ids || r.dataset.mid || '').split(',').filter(Boolean);
+      if (ids.some(id => openMids.has(id))) {
+        r.classList.add('open');
+        const b = r.querySelector('.lbody'); if (b) b.style.display = 'block';
+        const h = r.querySelector('.lhead'); if (h) h.setAttribute('aria-expanded', 'true');
+      }
+    });
+    openSecs.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'block'; });
+  };
+  const restoreFocus = () => {
+    if (!focusInfo) return;
+    const rows = log.querySelectorAll('.lrow');
+    for (const r of rows) {
+      const ids = (r.dataset.ids || r.dataset.mid || '').split(',').filter(Boolean);
+      if (!focusInfo.ids.some(id => ids.includes(id))) continue;
+      let el = null;
+      if (focusInfo.head) el = r.querySelector('.lhead');
+      else if (focusInfo.pick != null) {
+        // Match by iterating, not by building an attribute selector from the
+        // message's own field values — a raw quote/newline/bracket in a value
+        // would make querySelector throw and abort the focus restore.
+        el = Array.from(r.querySelectorAll('[data-pick]')).find(x =>
+          x.getAttribute('data-pick') === focusInfo.pick &&
+          x.getAttribute('data-val') === focusInfo.val) || r.querySelector('.lhead');
+      }
+      if (el) { el.focus(); return; }
+    }
+    // The original row is gone (e.g. filtered out by the pick). Keep focus in the
+    // log rather than dropping the user to <body>: focus the first row's header.
+    const first = rows[0] && rows[0].querySelector('.lhead');
+    if (first) first.focus();
+  };
+
+  updateCounts();
+  updateNow();
+  renderChrome();
+
+  if (messages.length === 0) {
+    status.textContent = 'Waiting for the bus…';
+    log.innerHTML = transportError ? EMPTY_ERROR_HTML[transportError] : EMPTY_HTML;
     return;
   }
 
-  log.innerHTML = '';
-  for (const msg of ordered) {
-    const div = document.createElement('div');
-    div.innerHTML = renderMsgHtml(msg).trim();
-    log.appendChild(div.firstElementChild);
+  // DevTools rule: while the reader has a message open, do NOT rebuild the log
+  // out from under them on live traffic. New messages queue; the view resumes
+  // the moment they collapse the open row.
+  if (isLive && openMids.size) {
+    status.textContent =
+      `${messages.length} captured · reading — collapse the open message to resume the live view`;
+    return;
   }
-  highlightAllJSON();
+
+  status.textContent =
+    `${messages.length} captured · ${msgs.length} shown` +
+    (droppedCount ? ` · ${droppedCount} dropped` : '') +
+    (paused ? ' · PAUSED' : '');
+
+  if (msgs.length === 0) {
+    // Distinguish "muted as noise" from "filtered out": if no real filter is
+    // set and everything is hidden by the noise mute, point at Show noise —
+    // Clear filters would be a dead click.
+    const noRealFilter = quickCat === 'all' &&
+      !['filter', 'search', 'session_filter', 'source_filter', 'dest_filter']
+        .some(id => document.getElementById(id).value.trim());
+    if (noRealFilter && !showNoise && noiseCount() > 0) {
+      log.innerHTML = `<div class="empty"><h3>All ${noiseCount()} messages are muted as noise</h3>
+        <p>High-frequency plumbing is hidden by default.</p>
+        <p><button class="btn secondary" onclick="toggleNoise()">Show noise</button></p></div>`;
+    } else {
+      log.innerHTML = `<div class="empty"><h3>No messages match the filter</h3>
+        <p><button class="btn secondary" onclick="clearFilters()">Clear filters</button></p></div>`;
+    }
+    return;
+  }
+
+  if (viewMode === 'timeline') { renderTimeline([...msgs]); reopen(); restoreFocus(); return; }
+
+  const ordered = sort === 'asc' ? [...msgs] : [...msgs].reverse();
+  log.innerHTML = coalesce(ordered).map(rowHtml).join('');
+  reopen();
+  restoreFocus();
+}
+
+// Keep the filter-bar chrome in sync: active-filter tags + the noise toggle.
+function renderChrome() {
+  const nb = document.getElementById('noise-btn');
+  if (nb) {
+    const n = noiseCount();
+    nb.textContent = showNoise ? `Hide noise (${n})` : `Show noise (${n})`;
+    nb.classList.toggle('active', showNoise);
+    nb.style.display = n ? '' : 'none';
+  }
+  const tagbox = document.getElementById('active-filters');
+  if (!tagbox) return;
+  const active = [
+    ['filter', 'type'], ['session_filter', 'session'],
+    ['source_filter', 'source'], ['dest_filter', 'dest'], ['search', 'search'],
+  ].map(([id, label]) => {
+    const v = document.getElementById(id).value.trim();
+    return v ? `<span class="ftag">${label}: ${esc(v)}<button data-clear="${id}" title="remove" aria-label="remove ${label} filter">×</button></span>` : '';
+  }).join('');
+  tagbox.innerHTML = active;
+  tagbox.style.display = active ? '' : 'none';
 }
 
 function msgSection(id, label, obj) {
@@ -643,8 +1623,8 @@ function esc(s) {
 // status bar. Pause stops ingestion entirely (manual, or automatically the
 // moment an incoming message matches the active filters).
 function pushMessage(msg) {
+  pulseWave();
   handleChatReply(msg);
-  if (paused) return;
   if (!msg.id) msg.id = ++nextId;
   messages.push(msg);
   const cap = maxBuffer();
@@ -654,11 +1634,26 @@ function pushMessage(msg) {
     droppedCount += excess;
   }
 
-  if (document.getElementById('pause-on-match').checked && matchesCurrentFilters(msg)) {
+  if (!paused && document.getElementById('pause-on-match').checked && matchesCurrentFilters(msg)) {
     setPaused(true);
   }
 
-  render();
+  if (paused) return;  // still buffered above; just skip the render while paused
+
+  scheduleRender();  // batch a burst into one render (won't disturb an open row)
+}
+
+// Coalesce all messages that arrive within one animation frame into a SINGLE
+// render. Rendering per message re-runs filteredMessages/updateCounts/coalesce
+// over the whole buffer (O(n) each), so a burst was O(n²) and pinned the main
+// thread; batching makes a burst one render per frame. User actions still call
+// render() synchronously for instant feedback.
+let _renderPending = false;
+function scheduleRender() {
+  if (_renderPending) return;
+  _renderPending = true;
+  const raf = window.requestAnimationFrame || (cb => setTimeout(cb, 16));
+  raf(() => { _renderPending = false; render(true); });
 }
 
 function matchesCurrentFilters(msg) {
@@ -667,10 +1662,12 @@ function matchesCurrentFilters(msg) {
   const fSess   = document.getElementById('session_filter').value.trim().toLowerCase();
   const fSrc    = document.getElementById('source_filter').value.trim().toLowerCase();
   const fDst    = document.getElementById('dest_filter').value.trim().toLowerCase();
-  // Only auto-pause when at least one filter is actually set — otherwise
-  // "pause on filter match" would fire on every single message.
-  if (!fType && !fSearch && !fSess && !fSrc && !fDst) return false;
-  return globMatch(msg.type, fType) &&
+  // Only auto-pause when at least one filter or a category chip is set —
+  // otherwise "pause on filter match" would fire on every single message.
+  const catActive = quickCat !== 'all';
+  if (!catActive && !fType && !fSearch && !fSess && !fSrc && !fDst) return false;
+  return (quickCat === 'all' || classifyMessage(msg) === quickCat) &&
+    globMatch(String(msg.type || ''), fType) &&
     matchesSearch(msg, fSearch) &&
     (!fSess || String(msg.session||'').toLowerCase().includes(fSess)) &&
     (!fSrc  || String(msg.source||'').toLowerCase().includes(fSrc)) &&
@@ -682,13 +1679,16 @@ function setPaused(value) {
   const btn = document.getElementById('pause-btn');
   btn.textContent = paused ? '▶ Resume' : '⏸ Pause';
   btn.classList.toggle('pause-active', paused);
+  btn.setAttribute('aria-pressed', paused ? 'true' : 'false');
 }
 
 function togglePause() {
   setPaused(!paused);
+  render();
 }
 
 function clearBuffer() {
+  if (messages.length && !confirm('Clear all captured messages? This cannot be undone.')) return;
   messages = [];
   droppedCount = 0;
   render();
@@ -698,14 +1698,25 @@ function clearBuffer() {
 function exportJSONL() {
   if (transportMode === 'sse') {
     // Use the server's full capture buffer
-    window.location.href = 'api/export';
+    window.location.href = withToken('api/export');
     return;
   }
   const lines = messages.map(m => JSON.stringify(m)).join('\n');
   download(lines, 'bus_messages.jsonl', 'application/x-ndjson');
 }
 
-function exportJSON() {
+async function exportJSON() {
+  // In service mode, export the full server capture buffer (same corpus as
+  // Export JSONL) rather than only the client-side backfill + live tail.
+  if (transportMode === 'sse') {
+    try {
+      const r = await authFetch('api/messages?since_id=0');
+      if (r.ok) {
+        download(JSON.stringify(await r.json(), null, 2), 'bus_messages.json', 'application/json');
+        return;
+      }
+    } catch (e) { /* fall through to the client-side buffer */ }
+  }
   download(JSON.stringify(messages, null, 2), 'bus_messages.json', 'application/json');
 }
 
@@ -721,13 +1732,27 @@ function download(content, filename, mime) {
 // mixed-content restrictions (Safari/older Firefox block ws://localhost
 // from https origins; a local file has no such limit).
 async function downloadStandalone() {
+  let html;
   try {
     const r = await fetch(window.location.pathname);
-    const html = await r.text();
-    download(html, 'ovos-busmon.html', 'text/html');
+    html = await r.text();
   } catch (e) {
-    download(document.documentElement.outerHTML, 'ovos-busmon.html', 'text/html');
+    html = '<!doctype html>\n' + document.documentElement.outerHTML;
   }
+  // Embed the captured messages so the saved copy REPLAYS them offline. Without
+  // this the page just boots and reconnects to a bus, clobbering the capture —
+  // the recipient would see nothing (or an unrelated live session). The boot
+  // code hydrates from this element and skips the live connection.
+  const payload = JSON.stringify({ messages: messages, droppedCount: droppedCount })
+    .replace(/<\/script/gi, '<\\/script');
+  const tag = '\n<scr' + 'ipt id="busmon-offline" type="application/json">' + payload + '<\/scr' + 'ipt>\n';
+  // Insert into <head>, before the app <script> runs, so the boot code can read
+  // the embedded data on load. (Placing it before </body> would put it AFTER the
+  // script, so the boot's getElementById would miss it and connect to a bus.)
+  const headClose = '</he' + 'ad>';
+  const idx = html.indexOf(headClose);
+  html = idx >= 0 ? html.slice(0, idx) + tag + html.slice(idx) : html + tag;
+  download(html, 'ovos-busmon.html', 'text/html');
 }
 
 // ─── Chat panel ───────────────────────────────────────────────────────────────
@@ -746,15 +1771,31 @@ function getChatSessionId() {
 
 const chatSessionId = getChatSessionId();
 document.getElementById('chat-session-id-label').textContent = chatSessionId;
+// Every session id we have chatted under — a reply correlates if it carries any
+// of these (the Session editor can send under a custom id).
+const chatSessionIds = new Set([chatSessionId]);
 
 let chatOpen = false;
+
+// Chat only works over SSE (service mode) — direct WS mode has no /api/chat
+// to send to. Disable the controls instead of letting Send fail every time.
+function updateChatAvailability() {
+  const disabled = transportMode !== 'sse';
+  const input = document.getElementById('chat-input');
+  const btn = document.getElementById('chat-send-btn');
+  const note = document.getElementById('chat-disabled-note');
+  if (input) input.disabled = disabled;
+  if (btn) btn.disabled = disabled;
+  if (note) note.style.display = disabled ? '' : 'none';
+}
 
 function toggleChat() {
   chatOpen = !chatOpen;
   const panel = document.getElementById('chat-panel');
   const btn = document.getElementById('chat-btn');
   panel.classList.toggle('open', chatOpen);
-  btn.classList.toggle('pause-active', chatOpen);
+  btn.classList.toggle('active', chatOpen);
+  btn.setAttribute('aria-pressed', chatOpen ? 'true' : 'false');
   if (chatOpen) document.getElementById('chat-input').focus();
 }
 
@@ -765,6 +1806,23 @@ function appendChatBubble(kind, text) {
   div.textContent = text;
   log.appendChild(div);
   log.scrollTop = log.scrollHeight;
+  return div;
+}
+
+// Pending-reply feedback: one placeholder bubble per in-flight turn, keyed by
+// the turn's session id, replaced in place once a correlated reply lands (or
+// by a timeout if none ever does).
+const CHAT_REPLY_TIMEOUT_MS = 30000;
+const pendingChatReplies = new Map(); // sid -> {bubble, timer}
+
+function resolvePendingChat(sid, kind, text) {
+  const p = pendingChatReplies.get(sid);
+  if (!p) return false;
+  clearTimeout(p.timer);
+  p.bubble.className = 'chat-bubble ' + kind;
+  p.bubble.textContent = text;
+  pendingChatReplies.delete(sid);
+  return true;
 }
 
 async function sendChat() {
@@ -775,20 +1833,66 @@ async function sendChat() {
     appendChatBubble('error', 'Chat requires service (SSE) mode — this page is in direct WebSocket mode.');
     return;
   }
-  appendChatBubble('me', text);
-  input.value = '';
+  // Chat under the Session declared in the editor (if any), else the default id.
+  let session = null, sid = chatSessionId, lang = 'en-US';
   try {
-    const resp = await fetch('api/chat', {
+    const s = buildSession();
+    if (Object.keys(s).length) { session = s; if (s.session_id) sid = s.session_id; if (s.lang) lang = s.lang; }
+  } catch (e) { appendChatBubble('error', e.message); return; }
+  chatSessionIds.add(sid);
+  if (chatSessionIds.size > 50) chatSessionIds.delete(chatSessionIds.values().next().value);
+  document.getElementById('chat-session-id-label').textContent = sid;
+
+  appendChatBubble('me', text);
+  addTurnTrace(sid);        // an expandable "trace" for this turn's bus events
+  input.value = '';
+
+  // A prior turn on this same session that never got a reply is superseded
+  // now — resolve it before starting the new placeholder.
+  resolvePendingChat(sid, 'error', 'no spoken reply received (the turn may have used a screen or media)');
+  const pendingBubble = appendChatBubble('assistant', 'assistant is responding…');
+  const timer = setTimeout(() => resolvePendingChat(sid, 'error', 'no spoken reply received (the turn may have used a screen or media)'), CHAT_REPLY_TIMEOUT_MS);
+  pendingChatReplies.set(sid, {bubble: pendingBubble, timer});
+  try {
+    const resp = await authFetch('api/chat', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({utterance: text, lang: 'en-us', session_id: chatSessionId}),
+      body: JSON.stringify({utterance: text, lang: lang, session_id: sid, session: session}),
     });
-    if (!resp.ok) {
-      appendChatBubble('error', 'Send failed: ' + await resp.text());
-    }
+    if (!resp.ok) resolvePendingChat(sid, 'error', 'Send failed: ' + prettyApiError(await resp.text()));
   } catch (e) {
-    appendChatBubble('error', 'Send failed: ' + e.message);
+    resolvePendingChat(sid, 'error', 'Send failed: ' + e.message);
   }
+}
+
+// Append a collapsible per-turn trace of the bus events for one chat turn,
+// built client-side from captured traffic (no new bus messages).
+function addTurnTrace(sid) {
+  const log = document.getElementById('chat-log');
+  const since = String(nowMs());
+  // This turn's start is the ceiling for the previous open-ended turn on the
+  // same session, so a later turn's bus events cannot bleed into an earlier
+  // turn's trace.
+  log.querySelectorAll('.chat-trace-btn').forEach(b => {
+    if (b.dataset.sid === sid && !b.dataset.until) b.dataset.until = since;
+  });
+  const wrap = document.createElement('div');
+  wrap.className = 'chat-trace';
+  wrap.innerHTML = `<button class="chat-trace-btn" data-sid="${escA(sid)}" data-since="${since}">▶ trace</button>` +
+                   `<div class="chat-trace-body" style="display:none"></div>`;
+  log.appendChild(wrap);
+  log.scrollTop = log.scrollHeight;
+}
+function nowMs() { try { return Date.parse(new Date().toISOString()); } catch (e) { return 0; } }
+
+function renderTurnTrace(bodyEl, sid, sinceMs, untilMs) {
+  const rows = messages
+    .filter(m => m.session === sid && Date.parse(m.timestamp) >= sinceMs
+                 && (!untilMs || Date.parse(m.timestamp) < untilMs))
+    .sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
+  bodyEl.innerHTML = rows.length
+    ? rows.map(m => `<div class="ctrace-row"><span class="chip-dot cat-${classifyMessage(m)}"></span><code>${esc(m.type)}</code> <span class="ctrace-det">${esc(detailOf(m))}</span></div>`).join('')
+    : '<div class="label" style="font-size:0.74rem;">no bus events captured for this turn yet</div>';
 }
 
 document.getElementById('chat-input').addEventListener('keydown', e => {
@@ -799,26 +1903,147 @@ document.getElementById('chat-input').addEventListener('keydown', e => {
 // when they belong to *this* browser session — every other bus message
 // keeps flowing through the normal log/timeline unaffected.
 function handleChatReply(msg) {
-  if (msg.session !== chatSessionId) return;
-  const t = (msg.type || '').toLowerCase();
+  if (!chatSessionIds.has(msg.session)) return;
+  const t = String(msg.type || '').toLowerCase();
   if (t === 'ovos.utterance.speak' || t === 'speak') {
     const utt = (msg.data && msg.data.utterance) || '';
-    if (utt) appendChatBubble('assistant', utt);
+    if (utt) {
+      if (!resolvePendingChat(msg.session, 'assistant', utt)) appendChatBubble('assistant', utt);
+    }
   } else if (t === 'complete_intent_failure') {
-    appendChatBubble('error', 'No response (complete_intent_failure)');
+    const text = 'No response (complete_intent_failure)';
+    if (!resolvePendingChat(msg.session, 'error', text)) appendChatBubble('error', text);
+  } else if (t === 'mycroft.skill.handler.complete') {
+    // GUI/media/other non-speak skills end the turn here with no spoken
+    // reply — resolve any still-pending bubble instead of letting it time
+    // out and falsely report "no response received". resolvePendingChat
+    // no-ops if a real speak already resolved this session, so it is safe
+    // to call unconditionally and skip appendChatBubble on a miss.
+    resolvePendingChat(msg.session, 'assistant', '(handled — no spoken reply)');
   }
+  // Refresh any open turn-traces for this session so events stream in live.
+  document.querySelectorAll('.chat-trace-btn.open').forEach(btn => {
+    if (btn.dataset.sid === msg.session) {
+      renderTurnTrace(btn.nextElementSibling, msg.session, Number(btn.dataset.since),
+                      btn.dataset.until ? Number(btn.dataset.until) : null);
+    }
+  });
 }
 
+// Delegated: toggle a chat turn's bus-event trace.
+document.getElementById('chat-log').addEventListener('click', e => {
+  const btn = e.target.closest('.chat-trace-btn');
+  if (!btn) return;
+  const body = btn.nextElementSibling;
+  const open = body.style.display === 'block';
+  body.style.display = open ? 'none' : 'block';
+  btn.classList.toggle('open', !open);
+  btn.textContent = (open ? '▶' : '▼') + ' trace';
+  if (!open) renderTurnTrace(body, btn.dataset.sid, Number(btn.dataset.since),
+                             btn.dataset.until ? Number(btn.dataset.until) : null);
+});
+
+['input', 'blur'].forEach(ev =>
+  document.getElementById('sess-advanced').addEventListener(ev, validateSessionAdvanced));
+
 // ─── Filter listeners ─────────────────────────────────────────────────────────
-['filter','search','session_filter','source_filter','dest_filter','sort']
-  .forEach(id => document.getElementById(id).addEventListener('input', render));
+// Debounce the text filters: each keystroke otherwise rescans and rebuilds the
+// whole buffer, which janks on a large log. The sort <select> stays immediate.
+function _debounce(fn, ms) {
+  let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); };
+}
+const _debouncedRender = _debounce(render, 120);
+['filter','search','session_filter','source_filter','dest_filter']
+  .forEach(id => document.getElementById(id).addEventListener('input', _debouncedRender));
+document.getElementById('sort').addEventListener('input', render);
+
+// Delegated log interaction: click any field value to filter by it (type →
+// watch that topic, session → inspect it, source/destination → route), and
+// click anywhere else on a row to expand its JSON.
+document.getElementById('log').addEventListener('click', e => {
+  const pk = e.target.closest('[data-pick]');
+  if (pk) { pick(pk.dataset.pick, pk.dataset.val); return; }
+  const head = e.target.closest('.lhead');
+  if (head) toggleRow(head.parentElement);
+});
+// Keyboard: a focused row header (role=button, tabindex=0) expands on Enter/Space.
+document.getElementById('log').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  // A pick-span (type/session/source/destination) takes priority over the row
+  // toggle — it sits inside .lhead, so without this the row would also expand.
+  const pk = e.target.closest('[data-pick]');
+  if (pk) { e.preventDefault(); pick(pk.dataset.pick, pk.dataset.val); return; }
+  const head = e.target.closest('.lhead');
+  if (head) { e.preventDefault(); toggleRow(head.parentElement); }
+});
+// Removable active-filter tags.
+document.getElementById('active-filters').addEventListener('click', e => {
+  const x = e.target.closest('[data-clear]');
+  if (x) { document.getElementById(x.dataset.clear).value = ''; render(); }
+});
+
+// ─── Keyboard shortcuts ───────────────────────────────────────────────────────
+// Quiet helpers for repeat use; never fire while typing in a field.
+document.addEventListener('keydown', e => {
+  // Never hijack a browser/OS shortcut (Ctrl+P, Cmd+G, …).
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  // Escape closes any open power-tool panel first — they stack on a phone and
+  // otherwise push the log far down the page with no keyboard way to dismiss
+  // them. Content stays in the DOM, so reopening restores it.
+  if (e.key === 'Escape') {
+    const open = document.querySelectorAll(
+      'details.tools[open], details.inject-panel[open], details.session-panel[open]');
+    if (open.length) { open.forEach(d => { d.open = false; }); e.preventDefault(); return; }
+  }
+  const el = e.target;
+  const tag = (el.tagName || '').toLowerCase();
+  const interactive = tag === 'input' || tag === 'textarea' || tag === 'select' ||
+                      tag === 'button' || tag === 'a' || tag === 'summary' || el.isContentEditable;
+  if (interactive) {
+    if (e.key === 'Escape' && (tag === 'input' || tag === 'textarea')) el.blur();
+    return;
+  }
+  if (e.key === '/') { e.preventDefault(); document.getElementById('search').focus(); }
+  else if (e.key === 'p') togglePause();
+  else if (e.key === 'g') toggleView();
+});
 
 // ─── Startup ──────────────────────────────────────────────────────────────────
-detectTransport().then((mode) => {
-  transportMode = mode;
-  if (mode === 'sse') startSSE();
-  else startDirectWS();
-});
+// Initial pressed-state for screen readers (chips and the view toggles).
+['view-btn', 'chat-btn', 'pause-btn'].forEach(id =>
+  document.getElementById(id).setAttribute('aria-pressed', 'false'));
+document.querySelectorAll('#quick-chips .chip').forEach(ch =>
+  ch.setAttribute('aria-pressed', ch.classList.contains('active') ? 'true' : 'false'));
+render();  // paint the first-run guidance before any traffic arrives
+updateChatAvailability();
+const _offlineData = document.getElementById('busmon-offline');
+if (_offlineData) {
+  // A saved offline copy: replay the embedded capture and do NOT connect to any
+  // bus, so the recipient sees exactly what was captured, not a live session.
+  try {
+    const d = JSON.parse(_offlineData.textContent);
+    messages = Array.isArray(d.messages) ? d.messages : [];
+    droppedCount = d.droppedCount || 0;
+    nextId = messages.reduce((mx, x) => Math.max(mx, x.id || 0), 0);
+  } catch (e) { messages = []; }
+  transportMode = 'offline';
+  setBadge('offline', `Offline snapshot · ${messages.length} messages`);
+  setWaveDown();
+  updateChatAvailability();
+  render();
+} else {
+  detectTransport().then((mode) => {
+    transportMode = mode;
+    updateChatAvailability();
+    if (mode === 'sse') startSSE();
+    else if (mode === 'auth') {
+      transportError = 'auth';
+      setBadge('err', 'Auth failed — check token');
+      setWaveDown();
+      render();
+    } else startDirectWS();
+  });
+}
 </script>
 </body>
 </html>
