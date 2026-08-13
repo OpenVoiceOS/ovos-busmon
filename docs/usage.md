@@ -210,5 +210,18 @@ loopback bind only. See the [README](../README.md) for the rules.
 A token travels as `?token=` on the URL or as an `Authorization: Bearer` header.
 The `?token=` form lets the SSE stream carry the token, which HTTP Basic cannot.
 
+### `since_id` and `limit` on `/api/messages`
+
+`limit` keeps the **newest** `M` messages with id greater than `since_id`. It
+does not keep the oldest `M`. This serves the UI's one-shot backfill: on
+`since_id=0` it returns the most recent screenful, not the start of the
+buffer.
+
+A script that pages forward through history with a rising `since_id` can
+lose messages if it also sets `limit`: any message beyond the newest `M` in
+that window is dropped, not deferred to the next page. To page forward
+without loss, omit `limit`, or set it larger than the expected message count
+between polls.
+
 ---
 [← Tutorials](tutorials.md) · [Home](index.md) · [Troubleshooting →](troubleshooting.md)
