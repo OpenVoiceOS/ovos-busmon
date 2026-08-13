@@ -1,10 +1,11 @@
 # ovos-busmon
 
-Live monitor, capture, and injection tool for the [OpenVoiceOS](https://openvoiceos.org) messagebus.
-Stream every bus message to a browser, filter by kind, inspect payloads,
-export captures as JSONL, and inject messages from the UI.
+A DevTools-style live log for the [OpenVoiceOS](https://openvoiceos.org) messagebus.
+Every message streams into a dense, one-row-per-message log. Filter it with
+chips and click-to-filter, inspect a row, group the stream by session, inject
+messages, and export a capture.
 
-![Group by session tracing one interaction](docs/img/timeline-view.png)
+![The dense DevTools-style log](docs/img/flat-stream.png)
 
 See the [docs](docs/index.md) for a full walkthrough with screenshots. Start
 with the [tutorials](docs/tutorials.md).
@@ -16,6 +17,10 @@ a laptop that can reach an OVOS device connects to its messagebus at once. No
 install, no server: the page opens a WebSocket straight to
 `ws://localhost:8181/core`. Set the host and port in the connection panel or
 with the `?host=&port=` query parameters.
+
+The bus is noisy. Sensor polling, sync heartbeats, enclosure animation, and IPC
+traffic can drown the messages you care about, so the log mutes that noise by
+default. Click **Show noise** to bring it back.
 
 Browser note: Chromium browsers allow a `ws://localhost` connection from an
 `https://` page, because localhost is a trustworthy origin. Safari and some
@@ -114,18 +119,20 @@ The service binds only to `127.0.0.1` by default. Do not expose it to untrusted 
 ## Features
 
 - Live "now" line: the assistant state (Heard, Thinking, Speaking, or Didn't understand), inferred from the latest traffic
-- Live message stream with a per-kind color dot and expandable, highlighted JSON (vendored highlighter, fully offline, no CDN)
-- Quick-filter chips with live counts, one each for Heard, Intents, Skills, Speech, or Errors. Errors also get a red edge
+- Dense, one-row-per-message log with a per-category color on the left edge (errors in red)
+- Firehose control: high-frequency plumbing (sensor polling, sync heartbeats, enclosure animation, mic and IPC chatter) is muted by default; click **Show noise** to reveal it
+- Consecutive rows of the same message type coalesce into one row with a ×N count
+- Category chips (all, heard, intents, skills, speech, errors) with live counts, plus click-to-filter on every type, session, source, and destination shown in a row
+- Click a row to expand its JSON inline, with **Copy JSON**. The log freezes while a row is open and resumes on collapse
+- Filter bar: type glob, full-text search, session, source, destination, and a newest/oldest order select, with removable active-filter tags and a **Clear** button
 - Group by session: group the stream into expandable per-interaction traces
 - Chat panel: chat with the assistant in text over one stable session id (multi-turn and converse work) while you watch the bus handle each turn
-- Filter by message type (glob patterns, for example `ovos.*` or `recognizer_loop:*`)
-- Full-text search across type, data, context and session
-- Filter by session id, source, and destination
-- Sort newest-first or oldest-first
 - Pause and resume capture, plus auto-pause on filter match
 - Bounded client-side buffer (configurable, with a visible dropped-count)
-- Export as JSONL or JSON (client-side or through `/api/export`)
-- Message injection (type, JSON `data`, and optional JSON `context`)
+- A **Tools** menu for Export JSONL, Export JSON, Save offline copy, Clear buffer, pause-on-match, and buffer size
+- Message injection (type, JSON `data`, and optional JSON `context`), with presets, and **Resend** / **Edit & send** on any captured row
+- Session editor: build the OVOS Session (`session_id`, `lang`, `site_id`, `system_unit`, `pipeline`) that travels in `context["session"]`, and attach it to injects and chat
+- Session-aware chat with a per-turn bus trace
 - Ring buffer with configurable capacity and `since_id` pagination
 - GitHub Pages deployable (Mode 1, no server needed)
 

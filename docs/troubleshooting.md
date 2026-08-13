@@ -13,7 +13,7 @@ page. Chromium browsers allow it. Safari and some Firefox versions block it.
 
 **Fix.** Use the offline copy:
 
-1. Click **Save offline copy** in the Data panel.
+1. Open the **Tools** menu and click **Save offline copy**.
 2. Save the file to your disk.
 3. Open the saved file in the browser.
 
@@ -66,6 +66,18 @@ to authenticate it.
 2. Check the **Host**, **Port**, and **Path** in the connection panel. The
    defaults are `localhost`, `8181`, and `/core`.
 3. In service mode, check `OVOS_BUS_HOST` and `OVOS_BUS_PORT`.
+
+## The stream looks empty or too quiet
+
+**Symptom.** The monitor connects, but few or no rows appear, even though the
+device is active.
+
+**Cause.** High-frequency plumbing, such as sensor polling, sync heartbeats,
+enclosure animation, and IPC traffic, is muted by default. It does not appear
+in the log or in the category chip counts.
+
+**Fix.** Click **Show noise** in the toolbar. It shows a live count of the
+muted messages. Click it again to mute them back.
 
 ## The stream looks idle
 

@@ -1,8 +1,9 @@
 # ovos-busmon docs
 
-`ovos-busmon` shows every message on the OVOS messagebus in a web page. You can
-watch the stream, filter it, inspect a payload, trace one interaction, inject a
-message, chat with the assistant, and export a capture.
+`ovos-busmon` shows every message on the OVOS messagebus as a dense,
+DevTools-style log in a web page. You can watch the log, filter it with chips
+and click-to-filter, mute high-frequency noise, inspect a row, trace one
+interaction, inject a message, chat with the assistant, and export a capture.
 
 Read the pages in this order:
 
