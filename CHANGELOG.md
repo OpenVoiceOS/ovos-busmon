@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1a22](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a22) (2026-08-13)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a21...0.1.1a22)
+
+**Merged pull requests:**
+
+- fix: busmon accessibility landmarks + roles and bus-down diagnostics [\#61](https://github.com/OpenVoiceOS/ovos-busmon/pull/61) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.1.1a21](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a21) (2026-08-13)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a20...0.1.1a21)
