@@ -156,6 +156,10 @@
     }
     .btn:hover { background: var(--accent-hover); }
     .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .chip:focus-visible, .theme-toggle:focus-visible, .chat-trace-btn:focus-visible,
+    .msg-section button:focus-visible, .ftag button:focus-visible, summary:focus-visible {
+      outline: 2px solid var(--accent); outline-offset: 2px;
+    }
     .btn.secondary {
       background: transparent; color: var(--ink); border: 1px solid var(--line); font-weight: 600;
     }
@@ -235,7 +239,7 @@
     .chat-input-row { display: flex; gap: 0.4rem; }
     .chat-input-row input {
       flex: 1 1 auto; background: var(--card-soft); color: var(--ink); border: 1px solid var(--line);
-      border-radius: var(--radius-sm); padding: 6px 10px; font-size: 0.9em;
+      border-radius: var(--radius-sm); padding: 6px 10px; font-size: 0.9em; min-height: 40px;
     }
     .chat-session-id { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); margin-top: 0.4rem; }
     .chat-trace { align-self: flex-start; max-width: 100%; margin: -0.2rem 0 0.2rem; }
@@ -348,6 +352,8 @@
       .field { max-width: none; }
       .btn { flex: 1 1 auto; }
       .now .now-detail { font-size: 0.82em; }
+      .layout { flex-wrap: wrap; }
+      .chat-panel { flex-basis: 100%; max-width: none; }
     }
 
     /* ─── DevTools-style dense log ───────────────────────────────────────────*/
@@ -558,7 +564,7 @@
 
 <div class="layout">
   <div class="container">
-    <div class="status-bar" id="status-bar" role="status" aria-live="polite">Waiting for the bus…</div>
+    <div class="status-bar" id="status-bar" role="status" aria-live="off">Waiting for the bus…</div>
     <div id="log" class="logtbl"></div>
   </div>
 
@@ -569,8 +575,9 @@
     <div class="chat-log" id="chat-log"></div>
     <div class="chat-input-row">
       <input type="text" id="chat-input" placeholder="Type a message…" autocomplete="off">
-      <button class="btn" onclick="sendChat()">Send</button>
+      <button class="btn" id="chat-send-btn" onclick="sendChat()">Send</button>
     </div>
+    <div class="chat-hint" id="chat-disabled-note" style="display:none">Requires service (SSE) mode — this page is in direct WebSocket mode.</div>
     <div class="chat-session-id">session: <span id="chat-session-id-label"></span></div>
   </div>
 </div>
@@ -745,6 +752,10 @@ function maxBuffer() {
 // a GitHub-Pages-hosted copy of this page is also https+hostname but has no
 // /api endpoints, so only a live /api/status answer selects service mode.
 let transportMode = 'ws';
+// Set when the transport is confirmed down or the token was rejected, so the
+// empty-state can point at the real problem instead of the first-run invitation.
+// Cleared the moment the transport reports open/connected again.
+let transportError = null;
 
 async function detectTransport() {
   try {
@@ -784,12 +795,16 @@ function startSSE() {
 function connectSSE() {
   if (_sseSource) _sseSource.close();
   _sseSource = new EventSource(withToken('api/stream'));
-  _sseSource.onopen  = () => { setBadge('sse', 'SSE (service)'); setWaveLive(); };
+  _sseSource.onopen  = () => { transportError = null; setBadge('sse', 'SSE (service)'); setWaveLive(); render(); };
   _sseSource.onerror = () => {
     setWaveDown();
     authFetch('api/status', {signal: AbortSignal.timeout(1500)})
-      .then(r => setBadge('err', r.status === 401 ? 'Auth failed — check token' : 'SSE error — reconnecting…'))
-      .catch(() => setBadge('err', 'SSE error — reconnecting…'));
+      .then(r => {
+        transportError = r.status === 401 ? 'auth' : 'down';
+        setBadge('err', r.status === 401 ? 'Auth failed — check token' : 'SSE error — reconnecting…');
+        render();
+      })
+      .catch(() => { transportError = 'down'; setBadge('err', 'SSE error — reconnecting…'); render(); });
   };
   _sseSource.addEventListener('message', e => {
     try {
@@ -833,9 +848,9 @@ function connectWS() {
   // UI or schedule a spurious reconnect.
   const sock = new WebSocket(url);
   _ws = sock;
-  sock.onopen  = () => { if (sock !== _ws) return; setBadge('ws', 'WS → ' + url); setWaveLive(); };
-  sock.onerror = () => { if (sock !== _ws) return; setBadge('err', 'WS error'); setWaveDown(); };
-  sock.onclose = () => { if (sock !== _ws) return; setBadge('err', 'WS closed — reconnecting in 3s…'); setWaveDown(); setTimeout(connectWS, 3000); };
+  sock.onopen  = () => { if (sock !== _ws) return; transportError = null; setBadge('ws', 'WS → ' + url); setWaveLive(); render(); };
+  sock.onerror = () => { if (sock !== _ws) return; transportError = 'down'; setBadge('err', 'WS error'); setWaveDown(); render(); };
+  sock.onclose = () => { if (sock !== _ws) return; transportError = 'down'; setBadge('err', 'WS closed — reconnecting in 3s…'); setWaveDown(); render(); setTimeout(connectWS, 3000); };
   sock.onmessage = e => {
     if (sock !== _ws) return;
     try {
@@ -1006,6 +1021,25 @@ function clearSession() {
   ['sess-id', 'sess-site', 'sess-pipeline', 'sess-advanced'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('sess-lang').value = '';
   document.getElementById('sess-unit').value = '';
+  const st = document.getElementById('sess-status');
+  if (st) { st.textContent = 'session cleared'; st.className = 'inline-label'; }
+}
+
+// Validate the Advanced JSON as the user types/leaves the field, so a typo
+// surfaces here instead of silently breaking the next inject/chat send.
+function validateSessionAdvanced() {
+  const st = document.getElementById('sess-status');
+  if (!st) return;
+  const adv = _v('sess-advanced');
+  if (!adv) { st.textContent = ''; st.className = 'inline-label'; return; }
+  try {
+    JSON.parse(adv);
+    st.textContent = 'advanced JSON ok';
+    st.className = 'inline-label inject-status ok';
+  } catch (e) {
+    st.textContent = 'Advanced session JSON: ' + e.message;
+    st.className = 'inline-label inject-status err';
+  }
 }
 function loadRowSession(ev, id) {
   ev.stopPropagation();
@@ -1200,8 +1234,9 @@ function copyMsg(ev, id) {
 // renders as a single collapsible group.
 
 // A message's category and noise flag depend only on its (immutable) type, so
-// compute once and cache on the message — filteredMessages/updateCounts/
-// coalesce/updateNow otherwise recompute these O(n) scans 3–4x per render.
+// compute once and cache off-object in a WeakMap (see _catCache above) —
+// filteredMessages/updateCounts/coalesce/updateNow otherwise recompute these
+// O(n) scans 3–4x per render.
 function classifyMessage(msg) {
   if (msg && typeof msg === 'object' && _catCache.has(msg)) return _catCache.get(msg);
   const t = String((msg && msg.type) || '').toLowerCase();
@@ -1279,15 +1314,15 @@ function rowHtml(item) {
   if (Object.keys(msg.data || {}).length) sections += msgSection(`data-${msg.id}`, 'message.data', msg.data);
   if (Object.keys(msg.context || {}).length) sections += msgSection(`ctx-${msg.id}`, 'message.context', msg.context);
   if (Object.keys(msg.session_data || {}).length) sections += msgSection(`sess-${msg.id}`, 'session', msg.session_data);
-  return `<div class="lrow cat-${cat}${cat === 'error' ? ' error' : ''}" data-mid="${msg.id}">
+  return `<div class="lrow cat-${cat}${cat === 'error' ? ' error' : ''}" data-mid="${msg.id}" data-ids="${item.ids.join(',')}">
     <div class="lhead" tabindex="0" role="button" aria-expanded="false" title="${cat} — Enter to expand">
       <span class="lt">${esc(ts)}</span>
-      <span class="lty" data-pick="filter" data-val="${escA(msg.type)}" title="filter by this type">${esc(msg.type)}</span>
+      <span class="lty" data-pick="filter" data-val="${escA(msg.type)}" tabindex="0" role="button" aria-label="filter by type ${escA(msg.type)}" title="filter by this type">${esc(msg.type)}</span>
       ${item.count > 1 ? `<span class="lx" title="${item.count} in a row">×${item.count}</span>` : ''}
       <span class="ld">${esc(det)}</span>
-      ${msg.session ? `<span class="lsess" data-pick="session_filter" data-val="${escA(msg.session)}" title="inspect this session">${esc(msg.session)}</span>` : ''}
-      ${msg.source ? `<span class="lroute" data-pick="source_filter" data-val="${escA(msg.source)}" title="filter by source">${esc(msg.source)}</span>` : ''}
-      ${msg.destination ? `<span class="lroute" data-pick="dest_filter" data-val="${escA(msg.destination)}" title="filter by destination">→ ${esc(msg.destination)}</span>` : ''}
+      ${msg.session ? `<span class="lsess" data-pick="session_filter" data-val="${escA(msg.session)}" tabindex="0" role="button" aria-label="filter by session ${escA(msg.session)}" title="inspect this session">${esc(msg.session)}</span>` : ''}
+      ${msg.source ? `<span class="lroute" data-pick="source_filter" data-val="${escA(msg.source)}" tabindex="0" role="button" aria-label="filter by source ${escA(msg.source)}" title="filter by source">${esc(msg.source)}</span>` : ''}
+      ${msg.destination ? `<span class="lroute" data-pick="dest_filter" data-val="${escA(msg.destination)}" tabindex="0" role="button" aria-label="filter by destination ${escA(msg.destination)}" title="filter by destination">→ ${esc(msg.destination)}</span>` : ''}
     </div>
     <div class="lbody" style="display:none">
       <div class="lbody-actions">
@@ -1317,6 +1352,20 @@ const EMPTY_HTML = `<div class="empty">
   <p>New here? Read the <a href="https://github.com/OpenVoiceOS/ovos-busmon/blob/dev/docs/tutorials.md" target="_blank" rel="noopener">tutorial</a>.</p>
 </div>`;
 
+// Shown instead of EMPTY_HTML when the transport itself is the problem — the
+// invitation to "talk to your assistant" is misleading if nothing can arrive.
+const EMPTY_ERROR_HTML = {
+  auth: `<div class="empty">
+    <h3>Authentication failed</h3>
+    <p>The bus rejected the token on this connection. Add the correct
+       <code>?token=</code> to the URL and reload.</p>
+  </div>`,
+  down: `<div class="empty">
+    <h3>Not connected to the bus</h3>
+    <p>The transport is down — reconnecting…</p>
+  </div>`,
+};
+
 function render(isLive) {
   const log    = document.getElementById('log');
   const status = document.getElementById('status-bar');
@@ -1324,14 +1373,23 @@ function render(isLive) {
   const msgs   = filteredMessages();
 
   // Preserve which rows AND which nested sections the user has expanded, so a
-  // rebuild does not collapse the JSON they are reading.
-  const openMids = new Set(Array.from(log.querySelectorAll('.lrow.open'), d => d.dataset.mid));
+  // rebuild does not collapse the JSON they are reading. A coalesced row's
+  // representative data-mid is NOT stable when a new same-type message joins
+  // the run (the newest member becomes the representative — see coalesce()),
+  // so track the full set of member ids (data-ids) an open run had, and on
+  // rebuild reopen any row that shares ANY member id with a previously-open
+  // run, not just one whose representative id happens to match.
+  const openMids = new Set();
+  log.querySelectorAll('.lrow.open').forEach(d => {
+    const ids = (d.dataset.ids || d.dataset.mid || '').split(',').filter(Boolean);
+    ids.forEach(id => openMids.add(id));
+  });
   const openSecs = new Set(Array.from(log.querySelectorAll('.msg-details'))
     .filter(d => d.style.display === 'block').map(d => d.id));
   const reopen = () => {
-    openMids.forEach(id => {
-      const r = log.querySelector('.lrow[data-mid="' + id + '"]');
-      if (r) {
+    log.querySelectorAll('.lrow').forEach(r => {
+      const ids = (r.dataset.ids || r.dataset.mid || '').split(',').filter(Boolean);
+      if (ids.some(id => openMids.has(id))) {
         r.classList.add('open');
         const b = r.querySelector('.lbody'); if (b) b.style.display = 'block';
         const h = r.querySelector('.lhead'); if (h) h.setAttribute('aria-expanded', 'true');
@@ -1344,7 +1402,11 @@ function render(isLive) {
   updateNow();
   renderChrome();
 
-  if (messages.length === 0) { status.textContent = 'Waiting for the bus…'; log.innerHTML = EMPTY_HTML; return; }
+  if (messages.length === 0) {
+    status.textContent = 'Waiting for the bus…';
+    log.innerHTML = transportError ? EMPTY_ERROR_HTML[transportError] : EMPTY_HTML;
+    return;
+  }
 
   // DevTools rule: while the reader has a message open, do NOT rebuild the log
   // out from under them on live traffic. New messages queue; the view resumes
@@ -1571,6 +1633,18 @@ const chatSessionIds = new Set([chatSessionId]);
 
 let chatOpen = false;
 
+// Chat only works over SSE (service mode) — direct WS mode has no /api/chat
+// to send to. Disable the controls instead of letting Send fail every time.
+function updateChatAvailability() {
+  const disabled = transportMode !== 'sse';
+  const input = document.getElementById('chat-input');
+  const btn = document.getElementById('chat-send-btn');
+  const note = document.getElementById('chat-disabled-note');
+  if (input) input.disabled = disabled;
+  if (btn) btn.disabled = disabled;
+  if (note) note.style.display = disabled ? '' : 'none';
+}
+
 function toggleChat() {
   chatOpen = !chatOpen;
   const panel = document.getElementById('chat-panel');
@@ -1588,6 +1662,23 @@ function appendChatBubble(kind, text) {
   div.textContent = text;
   log.appendChild(div);
   log.scrollTop = log.scrollHeight;
+  return div;
+}
+
+// Pending-reply feedback: one placeholder bubble per in-flight turn, keyed by
+// the turn's session id, replaced in place once a correlated reply lands (or
+// by a timeout if none ever does).
+const CHAT_REPLY_TIMEOUT_MS = 30000;
+const pendingChatReplies = new Map(); // sid -> {bubble, timer}
+
+function resolvePendingChat(sid, kind, text) {
+  const p = pendingChatReplies.get(sid);
+  if (!p) return false;
+  clearTimeout(p.timer);
+  p.bubble.className = 'chat-bubble ' + kind;
+  p.bubble.textContent = text;
+  pendingChatReplies.delete(sid);
+  return true;
 }
 
 async function sendChat() {
@@ -1611,6 +1702,13 @@ async function sendChat() {
   appendChatBubble('me', text);
   addTurnTrace(sid);        // an expandable "trace" for this turn's bus events
   input.value = '';
+
+  // A prior turn on this same session that never got a reply is superseded
+  // now — resolve it before starting the new placeholder.
+  resolvePendingChat(sid, 'error', 'no response received');
+  const pendingBubble = appendChatBubble('assistant', 'assistant is responding…');
+  const timer = setTimeout(() => resolvePendingChat(sid, 'error', 'no response received'), CHAT_REPLY_TIMEOUT_MS);
+  pendingChatReplies.set(sid, {bubble: pendingBubble, timer});
   try {
     const resp = await authFetch('api/chat', {
       method: 'POST',
@@ -1665,9 +1763,12 @@ function handleChatReply(msg) {
   const t = String(msg.type || '').toLowerCase();
   if (t === 'ovos.utterance.speak' || t === 'speak') {
     const utt = (msg.data && msg.data.utterance) || '';
-    if (utt) appendChatBubble('assistant', utt);
+    if (utt) {
+      if (!resolvePendingChat(msg.session, 'assistant', utt)) appendChatBubble('assistant', utt);
+    }
   } else if (t === 'complete_intent_failure') {
-    appendChatBubble('error', 'No response (complete_intent_failure)');
+    const text = 'No response (complete_intent_failure)';
+    if (!resolvePendingChat(msg.session, 'error', text)) appendChatBubble('error', text);
   }
   // Refresh any open turn-traces for this session so events stream in live.
   document.querySelectorAll('.chat-trace-btn.open').forEach(btn => {
@@ -1691,6 +1792,9 @@ document.getElementById('chat-log').addEventListener('click', e => {
                              btn.dataset.until ? Number(btn.dataset.until) : null);
 });
 
+['input', 'blur'].forEach(ev =>
+  document.getElementById('sess-advanced').addEventListener(ev, validateSessionAdvanced));
+
 // ─── Filter listeners ─────────────────────────────────────────────────────────
 ['filter','search','session_filter','source_filter','dest_filter','sort']
   .forEach(id => document.getElementById(id).addEventListener('input', render));
@@ -1707,6 +1811,10 @@ document.getElementById('log').addEventListener('click', e => {
 // Keyboard: a focused row header (role=button, tabindex=0) expands on Enter/Space.
 document.getElementById('log').addEventListener('keydown', e => {
   if (e.key !== 'Enter' && e.key !== ' ') return;
+  // A pick-span (type/session/source/destination) takes priority over the row
+  // toggle — it sits inside .lhead, so without this the row would also expand.
+  const pk = e.target.closest('[data-pick]');
+  if (pk) { e.preventDefault(); pick(pk.dataset.pick, pk.dataset.val); return; }
   const head = e.target.closest('.lhead');
   if (head) { e.preventDefault(); toggleRow(head.parentElement); }
 });
@@ -1741,8 +1849,10 @@ document.addEventListener('keydown', e => {
 document.querySelectorAll('#quick-chips .chip').forEach(ch =>
   ch.setAttribute('aria-pressed', ch.classList.contains('active') ? 'true' : 'false'));
 render();  // paint the first-run guidance before any traffic arrives
+updateChatAvailability();
 detectTransport().then((mode) => {
   transportMode = mode;
+  updateChatAvailability();
   if (mode === 'sse') startSSE();
   else startDirectWS();
 });
