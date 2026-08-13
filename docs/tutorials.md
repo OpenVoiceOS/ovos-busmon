@@ -143,10 +143,14 @@ kind: heard, intent, skill, speech, error, or other.
 
 ![Mobile: Group by session with one expanded trace](img/timeline-view-mobile.png)
 
-## 4. Inject a message and use the Chat panel
+## 4. Inject a message, replay traffic, and chat
 
-The **Inject** panel sends a message onto the bus. This is a power tool. A wrong
-message can change the state of your device. Use it with care.
+### Inject a message
+
+The **Inject** panel sends a message onto the bus. It works in both transport
+modes: over the WebSocket in direct mode, or through the `/api/send` endpoint
+in service mode. This is a power tool. A wrong message can change the state of
+your device. Use it with care.
 
 1. Open the panel **Inject a message onto the bus**.
 2. Set **Message type**, for example `speak`.
@@ -157,15 +161,22 @@ message can change the state of your device. Use it with care.
 The message goes onto the bus. It comes back through the monitor and shows in
 the log.
 
-To fill a common type, pick one from the **Preset** dropdown first. To replay a
-captured message, expand its row and use one of these:
-
-1. **Resend**: send that exact message again.
-2. **Edit & send**: load it into the Inject panel, then edit and send.
+To fill a common type, pick one from the **Preset** dropdown first.
 
 ![Desktop: the Inject panel and the Session editor](img/inject-panel.png)
 
 ![Mobile: the Inject panel and the Session editor](img/inject-panel-mobile.png)
+
+### Replay a captured message
+
+Resend and Edit & send also work in both transport modes. Expand a row in the
+log and use one of these:
+
+1. **Resend**: send that exact message again, with its original `data` and
+   `context`.
+2. **Edit & send**: load it into the Inject panel, then edit and send.
+
+### Build a Session
 
 To send under a specific session, use the **Session** panel. An OVOS session
 travels in each message. Build one here:
@@ -173,6 +184,13 @@ travels in each message. Build one here:
 1. Set the fields you need, such as **lang** or **site_id**.
 2. To copy a session from the log, click a `session=` value in a row.
 3. For an inject, check **attach the Session below**.
+
+### Chat with the assistant
+
+Chat needs service mode. If you followed section 1 with a direct WebSocket
+connection, start the `ovos-busmon` service first and open its page instead
+(see the [README](../README.md) for how to run the service), then come back
+to this step.
 
 The **Chat** panel sends text to the assistant. Each browser session gets one
 stable session id. The id holds across page reloads, so multi-turn context and
@@ -188,13 +206,13 @@ through the log, where you can watch each step.
 When the **Session** panel is filled, chat sends under that session. Under each
 turn, click **trace** to see the bus events that turn produced.
 
+Chat posts to the `/api/chat` endpoint, which emits `recognizer_loop:utterance`
+shaped exactly like a real text client. See the [usage guide](usage.md) for the
+API.
+
 ![Desktop: the Chat panel and the matching bus traffic](img/chat-panel.png)
 
 ![Mobile: the Chat panel and the matching bus traffic](img/chat-panel-mobile.png)
-
-The Inject panel and the Chat panel need service mode. They post to the
-`/api/send` and `/api/chat` endpoints. See the [usage guide](usage.md) for the
-API.
 
 ## 5. Export a capture
 
