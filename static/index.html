@@ -1406,6 +1406,21 @@ function render(isLive) {
   });
   const openSecs = new Set(Array.from(log.querySelectorAll('.msg-details'))
     .filter(d => d.style.display === 'block').map(d => d.id));
+  // Preserve keyboard focus across the rebuild. Activating a filter chip or
+  // collapsing the last open row rebuilds the log, which would otherwise dump a
+  // keyboard/screen-reader user back to <body>. Record which row (by member id)
+  // and which control (the header, or a data-pick field) held focus.
+  let focusInfo = null;
+  const _ae = document.activeElement;
+  if (_ae && log.contains(_ae)) {
+    const row = _ae.closest('.lrow');
+    const ids = row ? (row.dataset.ids || row.dataset.mid || '').split(',').filter(Boolean) : [];
+    if (_ae.hasAttribute && _ae.hasAttribute('data-pick')) {
+      focusInfo = { ids, pick: _ae.getAttribute('data-pick'), val: _ae.getAttribute('data-val') };
+    } else if (_ae.classList && _ae.classList.contains('lhead')) {
+      focusInfo = { ids, head: true };
+    }
+  }
   const reopen = () => {
     log.querySelectorAll('.lrow').forEach(r => {
       const ids = (r.dataset.ids || r.dataset.mid || '').split(',').filter(Boolean);
@@ -1416,6 +1431,25 @@ function render(isLive) {
       }
     });
     openSecs.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'block'; });
+  };
+  const restoreFocus = () => {
+    if (!focusInfo) return;
+    const rows = log.querySelectorAll('.lrow');
+    for (const r of rows) {
+      const ids = (r.dataset.ids || r.dataset.mid || '').split(',').filter(Boolean);
+      if (!focusInfo.ids.some(id => ids.includes(id))) continue;
+      let el = null;
+      if (focusInfo.head) el = r.querySelector('.lhead');
+      else if (focusInfo.pick != null) {
+        el = r.querySelector('[data-pick="' + focusInfo.pick + '"][data-val="'
+          + (focusInfo.val || '').replace(/"/g, '\\"') + '"]') || r.querySelector('.lhead');
+      }
+      if (el) { el.focus(); return; }
+    }
+    // The original row is gone (e.g. filtered out by the pick). Keep focus in the
+    // log rather than dropping the user to <body>: focus the first row's header.
+    const first = rows[0] && rows[0].querySelector('.lhead');
+    if (first) first.focus();
   };
 
   updateCounts();
@@ -1460,11 +1494,12 @@ function render(isLive) {
     return;
   }
 
-  if (viewMode === 'timeline') { renderTimeline([...msgs]); reopen(); return; }
+  if (viewMode === 'timeline') { renderTimeline([...msgs]); reopen(); restoreFocus(); return; }
 
   const ordered = sort === 'asc' ? [...msgs] : [...msgs].reverse();
   log.innerHTML = coalesce(ordered).map(rowHtml).join('');
   reopen();
+  restoreFocus();
 }
 
 // Keep the filter-bar chrome in sync: active-filter tags + the noise toggle.
@@ -1849,6 +1884,14 @@ document.getElementById('active-filters').addEventListener('click', e => {
 document.addEventListener('keydown', e => {
   // Never hijack a browser/OS shortcut (Ctrl+P, Cmd+G, …).
   if (e.ctrlKey || e.metaKey || e.altKey) return;
+  // Escape closes any open power-tool panel first — they stack on a phone and
+  // otherwise push the log far down the page with no keyboard way to dismiss
+  // them. Content stays in the DOM, so reopening restores it.
+  if (e.key === 'Escape') {
+    const open = document.querySelectorAll(
+      'details.tools[open], details.inject-panel[open], details.session-panel[open]');
+    if (open.length) { open.forEach(d => { d.open = false; }); e.preventDefault(); return; }
+  }
   const el = e.target;
   const tag = (el.tagName || '').toLowerCase();
   const interactive = tag === 'input' || tag === 'textarea' || tag === 'select' ||
