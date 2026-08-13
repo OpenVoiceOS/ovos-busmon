@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1a20](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a20) (2026-08-13)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a19...0.1.1a20)
+
+**Merged pull requests:**
+
+- fix: Save offline copy embeds the capture and replays it offline [\#57](https://github.com/OpenVoiceOS/ovos-busmon/pull/57) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.1.1a19](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a19) (2026-08-13)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a18...0.1.1a19)
