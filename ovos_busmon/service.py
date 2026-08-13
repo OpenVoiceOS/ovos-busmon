@@ -52,6 +52,8 @@ class _ThreadedBusClientAdapter:
     def __init__(self, host: str, port: int):
         from ovos_bus_client.client import MessageBusClient
 
+        self._host = host
+        self._port = port
         self._bus = MessageBusClient(host=host, port=port)
         self._loop = asyncio.get_event_loop()
         self._bridged: dict = {}
@@ -70,15 +72,27 @@ class _ThreadedBusClientAdapter:
 
     async def connect(self) -> None:
         self._bus.run_in_thread()
-        await self._loop.run_in_executor(
+        connected = await self._loop.run_in_executor(
             None, lambda: self._bus.connected_event.wait(timeout=5)
         )
+        # Raise on a dead bus instead of returning "connected": the threaded
+        # client's emit() otherwise blocks forever reconnecting, so the caller
+        # must fail fast to a 503 (and close() in a finally tears the thread
+        # down) rather than hang the request and leak a reconnect thread.
+        if not connected:
+            raise ConnectionError(
+                f"messagebus at {self._host}:{self._port} did not connect within 5s"
+            )
 
     async def close(self) -> None:
         await self._loop.run_in_executor(None, self._bus.close)
 
     async def emit(self, message) -> None:
         await self._loop.run_in_executor(None, self._bus.emit, message)
+
+    @property
+    def connected(self) -> bool:
+        return bool(self._bus.connected_event.is_set())
 
 
 def _make_bus(host: str, port: int):
@@ -116,6 +130,36 @@ STATIC_DIR = Path(__file__).parent.parent / "static"
 # Global ring buffer and SSE subscriber set
 _buffer: RingBuffer = RingBuffer(maxlen=BUFFER_SIZE)
 _subscribers: set[asyncio.Queue] = set()
+# The single long-lived bus opened by the lifespan for capture. Inject/chat
+# emit through THIS bus rather than opening a throwaway per request: a
+# throwaway client auto-reconnects forever when the bus is down (close() does
+# not stop it), which hung the request and leaked a thread on every failed
+# send. Reusing the persistent bus fails fast to 503 when it is not connected.
+_capture_bus = None
+
+
+def _bus_is_connected(bus) -> bool:
+    if bus is None:
+        return False
+    c = getattr(bus, "connected", None)
+    if c is not None:
+        return bool(c)
+    inner = getattr(bus, "_bus", None)
+    ev = getattr(inner, "connected_event", None)
+    return bool(ev is not None and ev.is_set())
+
+
+async def _emit_to_bus(message) -> None:
+    """Emit one message through the persistent capture bus, or 503 fast."""
+    bus = _capture_bus
+    if not _bus_is_connected(bus):
+        raise HTTPException(status_code=503, detail="Bus unavailable: messagebus not connected")
+    try:
+        await asyncio.wait_for(bus.emit(message), timeout=10)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Bus unavailable: {e}")
 
 
 # ─── SSE helpers ─────────────────────────────────────────────────────────────
@@ -141,6 +185,7 @@ async def _broadcast_to_sse(payload: dict) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _capture_bus
     from ovos_bus_client import Message
     from ovos_bus_client.session import SessionManager
 
@@ -184,9 +229,13 @@ async def lifespan(app: FastAPI):
         await bus.connect()
     except Exception:
         pass  # allow startup even if bus is not available
+    # Inject/chat reuse this persistent bus (it reconnects on its own);
+    # never a throwaway per-request client.
+    _capture_bus = bus
     try:
         yield
     finally:
+        _capture_bus = None
         bus.remove("message", _on_raw)
         try:
             await bus.close()
@@ -298,15 +347,9 @@ async def api_export(_: str = Depends(_verify)):
 
 @app.post("/api/send", status_code=202)
 async def api_send(req: SendRequest, _: str = Depends(_verify)):
-    try:
-        from ovos_bus_client import Message
+    from ovos_bus_client import Message
 
-        bus = _make_bus(OVOS_BUS_HOST, OVOS_BUS_PORT)
-        await bus.connect()
-        await bus.emit(Message(req.type, req.data, req.context))
-        await bus.close()
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Bus unavailable: {e}")
+    await _emit_to_bus(Message(req.type, req.data, req.context))
     return {"ok": True}
 
 
@@ -351,15 +394,12 @@ async def api_chat(req: ChatRequest, _: str = Depends(_verify)):
             {"utterances": [utterance], "lang": lang},
             context,
         )
-
-        bus = _make_bus(OVOS_BUS_HOST, OVOS_BUS_PORT)
-        await bus.connect()
-        await bus.emit(msg)
-        await bus.close()
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Bus unavailable: {e}")
+        raise HTTPException(status_code=500, detail=f"Invalid chat request: {e}")
+
+    await _emit_to_bus(msg)
     return {"ok": True}
 
 

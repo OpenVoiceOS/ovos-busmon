@@ -150,10 +150,40 @@ async def test_send_validation(client):
 
 @pytest.mark.asyncio
 async def test_send_ok(client):
-    """POST /api/send should return 202 — uses the stubbed AsyncMessageBusClient."""
-    r = await client.post("/api/send", json={"type": "speak", "data": {"utterance": "hello"}})
+    """POST /api/send emits through the persistent capture bus and returns 202."""
+    import ovos_busmon.service as svc
+
+    class _Bus:
+        connected = True
+
+        async def emit(self, msg):
+            pass
+
+    with patch.object(svc, "_capture_bus", _Bus()):
+        r = await client.post("/api/send", json={"type": "speak", "data": {"utterance": "hello"}})
     assert r.status_code == 202
     assert r.json()["ok"] is True
+
+
+@pytest.mark.asyncio
+async def test_send_503_when_bus_not_connected(client):
+    """A dead/absent capture bus must fail fast to 503 — never hang the request
+    or open a throwaway per-request client that reconnects forever."""
+    import ovos_busmon.service as svc
+
+    with patch.object(svc, "_capture_bus", None):
+        r = await client.post("/api/send", json={"type": "speak", "data": {}})
+    assert r.status_code == 503
+
+    class _Down:
+        connected = False
+
+        async def emit(self, msg):
+            raise AssertionError("must not emit on a disconnected bus")
+
+    with patch.object(svc, "_capture_bus", _Down()):
+        r = await client.post("/api/send", json={"type": "speak", "data": {}})
+    assert r.status_code == 503
 
 
 @pytest.mark.asyncio
@@ -239,6 +269,8 @@ async def test_chat_payload_shape(client):
     captured = {}
 
     class _RecordingBus:
+        connected = True
+
         def __init__(self, **kw):
             pass
 
@@ -253,7 +285,7 @@ async def test_chat_payload_shape(client):
             captured["data"] = msg.data
             captured["context"] = msg.context
 
-    with patch.object(svc, "_make_bus", lambda h, p: _RecordingBus()):
+    with patch.object(svc, "_capture_bus", _RecordingBus()):
         r = await client.post(
             "/api/chat",
             json={"utterance": "what time is it", "lang": "en-us", "session_id": "chat-abc123"},
@@ -281,6 +313,8 @@ async def test_chat_honors_client_declared_session(client):
     captured = {}
 
     class _RecordingBus:
+        connected = True
+
         def __init__(self, **kw):
             pass
 
@@ -298,7 +332,7 @@ async def test_chat_honors_client_declared_session(client):
         "session_id": "sess-kitchen", "lang": "pt-PT",
         "site_id": "kitchen", "pipeline": ["stop_high", "padatious_high"],
     }
-    with patch.object(svc, "_make_bus", lambda h, p: _RecordingBus()):
+    with patch.object(svc, "_capture_bus", _RecordingBus()):
         r = await client.post(
             "/api/chat",
             json={
@@ -327,6 +361,8 @@ async def test_chat_empty_session_uses_default_build(client):
     captured = {}
 
     class _RecordingBus:
+        connected = True
+
         def __init__(self, **kw):
             pass
 
@@ -339,7 +375,7 @@ async def test_chat_empty_session_uses_default_build(client):
         async def emit(self, msg):
             captured["context"] = msg.context
 
-    with patch.object(svc, "_make_bus", lambda h, p: _RecordingBus()):
+    with patch.object(svc, "_capture_bus", _RecordingBus()):
         r = await client.post(
             "/api/chat",
             json={"utterance": "hi", "session_id": "s1", "session": {}},
