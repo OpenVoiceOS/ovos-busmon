@@ -1,62 +1,95 @@
 # Using ovos-busmon
 
 `ovos-busmon` streams every message on the OVOS messagebus to a browser. There
-you can filter, inspect, trace, inject, and chat. This page is a reference for
-each part of the UI. For installation and the transport modes, see the
-[README](../README.md). For a step-by-step walkthrough, see the
-[tutorials](tutorials.md).
+you can filter and inspect the log, trace an interaction, inject a message, and
+chat with the assistant. This page is a reference for each part of the UI. For
+installation and the transport modes, see the [README](../README.md). For a
+step-by-step walkthrough, see the [tutorials](tutorials.md).
 
-## The live stream
+## The now line
 
-The default view is a flat, live list of every bus message. Each row shows the
-message type, the time, and the session, source, and destination routing
-fields. Click a row to expand its `data`, `context` and `session` payloads as
-highlighted JSON.
+A single line at the top says what the assistant is doing right now. It reads
+the latest meaningful traffic and shows one state: *Heard*, *Thinking*,
+*Speaking*, or *Didn't understand*. Use it to see the assistant's state at a
+glance without reading the stream.
 
-![Desktop: the flat stream](img/flat-stream.png)
+## The live log
 
-![Mobile: the flat stream](img/flat-stream-mobile.png)
+The default view is a dense, DevTools-style log: one monospace row per bus
+message, with the time, type, a short detail, the session, and the
+source-to-destination route. A color on the left edge of the row marks the
+category, and an **error** row gets a red edge instead.
 
-![Desktop: an expanded message with highlighted JSON](img/message-detail.png)
+Click a row to expand its `data`, `context`, and `session` payloads as
+highlighted JSON, inline below the row. **Copy JSON** copies the whole
+message. While a row is expanded, the log freezes: new traffic queues instead
+of scrolling the row away, and rendering resumes when you collapse it.
 
-![Mobile: an expanded message with highlighted JSON](img/message-detail-mobile.png)
+![Desktop: the dense log](img/flat-stream.png)
+
+![Mobile: the dense log](img/flat-stream-mobile.png)
+
+![Desktop: an expanded row with highlighted JSON](img/message-detail.png)
+
+![Mobile: an expanded row with highlighted JSON](img/message-detail-mobile.png)
+
+### Firehose control (noise)
+
+High-frequency plumbing, such as sensor polling, sync heartbeats, enclosure
+animation, mic level updates, and IPC traffic, is muted by default so it does
+not drown the messages you care about. The **Show noise** button reveals it,
+shows a live count, and toggles back to hide it again.
+
+Consecutive rows with the same message type coalesce into one row with a
+**×N** count next to the type, so a burst reads as a single line instead of a
+wall of duplicates.
 
 ### Filtering
 
-The top bar filters the visible stream. It does not discard anything from the
+The filter bar filters the visible log. It does not discard anything from the
 capture buffer.
 
-- **Type filter**: glob patterns, for example `ovos.*`, `recognizer_loop:*`, or
+- **Category chips**: all, heard, intents, skills, speech, errors. Each
+  chip shows a live count. **all** clears the chip filter.
+- **Type (glob)**: glob patterns, for example `ovos.*`, `recognizer_loop:*`, or
   `speak`.
-- **Search**: full-text across type, data, context and session.
-- **Session, source, and destination**: match each routing field exactly.
-- **Sort**: newest first (the default) or oldest first.
+- **Search content**: full-text across type, data, context and session.
+- **Session**, **Source**, **Destination**: match that field.
+- **Order**: newest first (the default) or oldest first.
+- **Clear**: reset every filter and the selected chip.
 
-![Desktop: the type filter shows only speak messages](img/filter-speak.png)
+Click-to-filter works on every row: click a **type** to watch that topic,
+a **session** to inspect it, or a **source** or **destination** to filter that
+route. Active filters render as removable tags above the log.
 
-![Mobile: the type filter shows only speak messages](img/filter-speak-mobile.png)
+![Desktop: a chip filters the log to speak messages](img/filter-speak.png)
 
-### Buffer and pause
+![Mobile: a chip filters the log to speak messages](img/filter-speak-mobile.png)
 
-The client keeps a bounded buffer. The default is 5000 messages, and you set the
-size in the toolbar. The client drops the oldest messages first, and the status
-bar shows how many it dropped.
+### Buffer, pause, and the Tools menu
 
-**Pause** stops ingestion. **Pause on filter match** stops the stream the
-instant an incoming message matches the active filters. Use it to catch one
-specific message live without losing it to scrollback.
+The client keeps a bounded buffer. The default is 5000 messages, and you set
+the size from the **Tools** menu. The client drops the oldest messages first,
+and the status bar shows how many it dropped.
 
-## Timeline view
+**Pause** stops ingestion. In the **Tools** menu, **Pause on filter match**
+stops the log the instant an incoming message matches the active filters, to
+catch one specific message live without losing it to scrollback.
 
-**Timeline view** groups the flat stream by session id. When a session id is
+The **Tools** menu also holds **Export JSONL**, **Export JSON**, **Save
+offline copy**, and **Clear buffer**.
+
+## Group by session
+
+**Group by session** groups the flat stream by session id. When a session id is
 absent, it falls back to an utterance-correlation id in `context`. One
 interaction then reads as a single expandable trace: utterance, then pipeline
-match, then skill handler, then speak output. Each step carries a category
-badge: `utterance`, `pipeline`, `skill`, `output`, or `other`.
+match, then skill handler, then speak output. Each step carries the same color
+dot as the flat stream: Heard, Intent, Skill, Speech, Error, or Other.
 
-![Desktop: the Timeline view with an expanded trace](img/timeline-view.png)
+![Desktop: Group by session with an expanded trace](img/timeline-view.png)
 
-![Mobile: the Timeline view with an expanded trace](img/timeline-view-mobile.png)
+![Mobile: Group by session with an expanded trace](img/timeline-view-mobile.png)
 
 ## Chat panel
 
@@ -69,8 +102,17 @@ Replies that belong to that session (`ovos.utterance.speak` or `speak`) render
 as bubbles. Everything else keeps flowing through the normal stream, where you
 watch the full pipeline handle your utterance.
 
+When the [Session editor](#the-session-editor) is filled, chat sends every turn
+under that session instead of the default id. Set a `lang` or a `site_id` there
+to converse as a different device.
+
+Under each turn, a **trace** toggle shows the bus events that turn produced,
+built from captured traffic. Use it to see the pipeline handle one utterance
+without leaving the chat.
+
 Chat needs service mode. It posts to the `/api/chat` endpoint, which emits
-`recognizer_loop:utterance` shaped exactly like a real text client.
+`recognizer_loop:utterance` shaped exactly like a real text client. The endpoint
+also accepts an optional `session` object, which it honors as declared.
 
 ![Desktop: the Chat panel and the matching bus traffic](img/chat-panel.png)
 
@@ -83,9 +125,35 @@ JSON, and an optional `context` JSON. The service validates the message, emits
 it through the bus client, and the message comes back in the stream through the
 monitor's own listener. This gives you a full bus REPL for reproducing bugs.
 
-![Desktop: the Inject panel sends a speak message](img/inject-panel.png)
+A **Preset** dropdown fills a common message type, such as `speak` or
+`recognizer_loop:utterance`, with a skeleton payload. You then edit and send.
 
-![Mobile: the Inject panel sends a speak message](img/inject-panel-mobile.png)
+You can also replay from the log. Expand any row and use:
+
+- **Resend**: re-inject that exact message, with its original `data` and
+  `context`, onto the bus.
+- **Edit & send**: load that message into the Inject panel, so you tweak it
+  before sending.
+
+![Desktop: the Inject panel and the Session editor](img/inject-panel.png)
+
+![Mobile: the Inject panel and the Session editor](img/inject-panel-mobile.png)
+
+## The Session editor
+
+An OVOS session is stateless. The client declares it in each message, inside
+`context["session"]`. The **Session** panel builds one, so you can test how the
+core behaves under a given session.
+
+The typed fields are `session_id`, `lang`, `site_id`, `system_unit`, and
+`pipeline` (a comma-separated list of matcher ids). An **Advanced** box merges
+raw session JSON for any other field. To seed the editor from live traffic,
+click a `session=` value in a row, or use **Load session** on an expanded row.
+
+The **Session** applies in two places:
+
+- The Inject panel attaches it when you check **attach the Session below**.
+- The Chat panel sends every turn under it (see below).
 
 ## HTTP API
 

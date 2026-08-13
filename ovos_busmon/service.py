@@ -241,6 +241,10 @@ class ChatRequest(BaseModel):
     utterance: str
     lang: str = "en-us"
     session_id: str
+    # Optional client-declared Session (busmon Session editor). When present it
+    # is honored verbatim (only session_id/lang are backfilled); when absent the
+    # server builds a default Session from session_id + lang.
+    session: Optional[dict] = None
 
 
 @app.get("/api/status")
@@ -324,15 +328,27 @@ async def api_chat(req: ChatRequest, _: str = Depends(_verify)):
         from ovos_bus_client import Message
         from ovos_bus_client.session import Session
 
-        sess = Session(session_id=req.session_id, lang=req.lang)
-        # SESSION-1: an empty pipeline list means "use the server's default".
-        # Serializing this client's default pipeline would override the
-        # core's configured pipeline with plugins that may not exist there.
-        sess.pipeline = []
-        context = {"source": "ovos-busmon-chat", "session": sess.serialize()}
+        if req.session:
+            # A non-empty client-declared Session (busmon Session editor) is
+            # honored verbatim; an empty {} is treated as "not declared" and
+            # falls through to the default build (which suppresses pipeline).
+            # Backfill session_id and lang so pipeline and reply correlation work.
+            sess_dict = dict(req.session)
+            sess_dict.setdefault("session_id", req.session_id)
+            sess_dict.setdefault("lang", req.lang)
+            context = {"source": "ovos-busmon-chat", "session": sess_dict}
+            lang = sess_dict.get("lang", req.lang)
+        else:
+            sess = Session(session_id=req.session_id, lang=req.lang)
+            # SESSION-1: an empty pipeline list means "use the server's default".
+            # Serializing this client's default pipeline would override the
+            # core's configured pipeline with plugins that may not exist there.
+            sess.pipeline = []
+            context = {"source": "ovos-busmon-chat", "session": sess.serialize()}
+            lang = req.lang
         msg = Message(
             "recognizer_loop:utterance",
-            {"utterances": [utterance], "lang": req.lang},
+            {"utterances": [utterance], "lang": lang},
             context,
         )
 

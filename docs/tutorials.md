@@ -37,7 +37,7 @@ Chromium browsers allow it. Safari and some Firefox versions block it.
 
 To work around this block, do the following:
 
-1. Click **Standalone HTML** in the toolbar.
+1. Open the **Tools** menu and click **Save offline copy**.
 2. Save the file to your disk.
 3. Open the saved file in the browser.
 
@@ -46,82 +46,132 @@ the browser does not block the connection.
 
 ## 2. Watch and filter the stream
 
-The default view is a live list of every bus message. Each row shows the message
-type, the time, and the routing fields.
+The default view is a dense log, one row per bus message. A line at the top,
+the now line, shows the assistant state, such as *Heard*, *Thinking*,
+*Speaking*, or a failure to understand.
 
-![Desktop: the flat live stream](img/flat-stream.png)
+Each row shows the time, the message type, a short detail, the session, and
+the source and destination. A color on the left edge of the row marks the
+category. An error row gets a red edge.
 
-![Mobile: the flat live stream](img/flat-stream-mobile.png)
+![Desktop: the dense DevTools-style log](img/flat-stream.png)
 
-The toolbar filters the visible rows. A filter hides rows. It does not delete
-them from the buffer.
+![Mobile: the dense DevTools-style log](img/flat-stream-mobile.png)
 
-- **Filter by type**: a glob pattern such as `ovos.*`, `recognizer_loop:*`, or
-  `speak`.
+### Firehose control
+
+A real device bus bursts with high-frequency plumbing: sensor polling, sync
+heartbeats, enclosure animation, mic level updates, and IPC chatter. The log
+mutes these message types by default, so the signal does not drown.
+
+Click **Show noise** to reveal them. The button shows a live count. Click it
+again to mute them back.
+
+When several rows in a row share the same message type, the log collapses
+them into one row with a **×N** count next to the type. This keeps a burst of
+identical messages readable as a single line.
+
+### Filtering the visible rows
+
+A filter hides rows. It does not delete them from the buffer.
+
+The **category chips** are the fastest filter: all, heard, intents, skills,
+speech, and errors. Click one chip to show only that category. Each chip shows
+a live count. Click **all** to clear the chip filter.
+
+The filter bar also has these fields:
+
+- **Type (glob)**: a glob pattern, for example `ovos.*` or `speak`, matches the
+  message type.
 - **Search content**: a full-text match across type, data, context and session.
-- **Filter by session_id, source, and destination**: an exact match on each
-  routing field.
-- **Sort**: newest first or oldest first.
+- **Session**, **Source**, **Destination**: a match on that field.
+- **Order**: newest first or oldest first.
 
-![Desktop: the type filter shows only speak messages](img/filter-speak.png)
+Click **Clear** to reset every filter and the selected chip.
 
-![Mobile: the type filter shows only speak messages](img/filter-speak-mobile.png)
+Every value shown in a row is also a filter switch. Click a **type** to watch
+only that topic. Click a **session** to inspect that session.
+
+Click a **source** or **destination** to filter that route. Active filters
+show as removable tags above the log.
+
+![Desktop: a chip filters the log to speak messages](img/filter-speak.png)
+
+![Mobile: a chip filters the log to speak messages](img/filter-speak-mobile.png)
 
 To hold the stream still, click **Pause**. Click it again to resume.
 
-The checkbox **Pause on filter match** stops the stream at the first message
-that matches your filters. Set a filter first. Use this to catch one message
-live before it scrolls away.
+Open the **Tools** menu for more controls. The checkbox **Pause on filter
+match** stops the stream at the first message that matches your filters. Set a
+filter first. Use this to catch one message live before it scrolls away.
 
 The monitor keeps a bounded buffer. The default is 5000 messages. Set the size
-in the **Buffer size** box.
+in the **Tools** menu.
 
 The monitor drops the oldest messages first. The status bar shows the dropped
 count.
 
 ## 3. Inspect a message and trace an interaction
 
-Click a row to expand it. The row opens the `data`, `context` and `session`
-fields as highlighted JSON.
+Click a row to expand it inline. The row opens the `data`, `context`, and
+`session` fields as highlighted JSON, with a **Copy JSON** button for the
+whole message.
 
-![Desktop: an expanded message with highlighted JSON](img/message-detail.png)
+While a row is open, the log freezes. New traffic queues instead of pushing
+the open row out of view. Collapse the row to resume the live view. The
+queued traffic then renders.
 
-![Mobile: an expanded message with highlighted JSON](img/message-detail-mobile.png)
+![Desktop: an expanded row with highlighted JSON](img/message-detail.png)
 
-To read one interaction as a single trace, use the Timeline view:
+![Mobile: an expanded row with highlighted JSON](img/message-detail-mobile.png)
 
-1. Click **Timeline view** in the toolbar.
+To read one interaction as a single trace, group the stream by session:
+
+1. Click **Group by session** in the toolbar.
 2. Find the interaction you want. Each group is one session.
 3. Click the group to expand its steps.
 
-The Timeline view groups the stream by session id. One interaction reads as one
-trace: the utterance, then the pipeline match, then the skill handler, then the
-speak output.
+This view groups the stream by session id. One interaction reads as one trace:
+the utterance, then the pipeline match, then the skill handler, then the speak
+output.
 
-Each step carries a category badge. The badge is `utterance`, `pipeline`,
-`skill`, `output`, or `other`.
+Each step carries the same category color as the log. The color marks the
+kind: heard, intent, skill, speech, error, or other.
 
-![Desktop: the Timeline view with one expanded trace](img/timeline-view.png)
+![Desktop: Group by session with one expanded trace](img/timeline-view.png)
 
-![Mobile: the Timeline view with one expanded trace](img/timeline-view-mobile.png)
+![Mobile: Group by session with one expanded trace](img/timeline-view-mobile.png)
 
 ## 4. Inject a message and use the Chat panel
 
 The **Inject** panel sends a message onto the bus. This is a power tool. A wrong
 message can change the state of your device. Use it with care.
 
-1. Open the panel **Inject message onto the bus**.
+1. Open the panel **Inject a message onto the bus**.
 2. Set **Message type**, for example `speak`.
 3. Set **Payload JSON (data)**.
 4. Set **Context JSON (optional)** if you need it.
 5. Click **Send message**.
 
 The message goes onto the bus. It comes back through the monitor and shows in
-the stream.
+the log.
 
-![Desktop: the Inject panel sends a speak message](img/inject-panel.png)
+To fill a common type, pick one from the **Preset** dropdown first. To replay a
+captured message, expand its row and use one of these:
 
-![Mobile: the Inject panel sends a speak message](img/inject-panel-mobile.png)
+1. **Resend**: send that exact message again.
+2. **Edit & send**: load it into the Inject panel, then edit and send.
+
+![Desktop: the Inject panel and the Session editor](img/inject-panel.png)
+
+![Mobile: the Inject panel and the Session editor](img/inject-panel-mobile.png)
+
+To send under a specific session, use the **Session** panel. An OVOS session
+travels in each message. Build one here:
+
+1. Set the fields you need, such as **lang** or **site_id**.
+2. To copy a session from the log, click a `session=` value in a row.
+3. For an inject, check **attach the Session below**.
 
 The **Chat** panel sends text to the assistant. Each browser session gets one
 stable session id. The id holds across page reloads, so multi-turn context and
@@ -132,7 +182,10 @@ converse keep working.
 3. Click **Send**.
 
 The reply shows as a bubble in the Chat panel. The full pipeline still flows
-through the stream, where you can watch each step.
+through the log, where you can watch each step.
+
+When the **Session** panel is filled, chat sends under that session. Under each
+turn, click **trace** to see the bus events that turn produced.
 
 ![Desktop: the Chat panel and the matching bus traffic](img/chat-panel.png)
 
@@ -148,7 +201,7 @@ The toolbar exports the buffer to a file. Pick one of three formats:
 
 - **Export JSONL**: one JSON message per line.
 - **Export JSON**: one JSON array of every message.
-- **Standalone HTML**: the whole monitor as a local file, with the messages
+- **Save offline copy**: the whole monitor as a local file, with the messages
   inside it.
 
 In service mode, **Export JSONL** downloads the full server buffer from the
