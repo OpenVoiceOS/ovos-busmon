@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1a15](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a15) (2026-08-13)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a14...0.1.1a15)
+
+**Merged pull requests:**
+
+- docs: fix busmon transport-mode accuracy and tutorial structure [\#46](https://github.com/OpenVoiceOS/ovos-busmon/pull/46) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.1.1a14](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a14) (2026-08-13)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a13...0.1.1a14)
