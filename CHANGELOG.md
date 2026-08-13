@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1a21](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a21) (2026-08-13)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a20...0.1.1a21)
+
+**Merged pull requests:**
+
+- fix: busmon fleet defects \(401 auth downgrade, pause drop, chat false-negative, SR flood\) [\#59](https://github.com/OpenVoiceOS/ovos-busmon/pull/59) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.1.1a20](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a20) (2026-08-13)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a19...0.1.1a20)
