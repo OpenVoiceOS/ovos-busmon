@@ -190,11 +190,6 @@
     }
     .inject-status { font-size: 0.85rem; margin-top: 4px; }
 
-    .msg {
-      border: 1px solid var(--line); padding: 0.8rem; margin-bottom: 0.8rem;
-      background: var(--card); border-radius: var(--radius); cursor: pointer; box-shadow: var(--shadow);
-    }
-    .msg-type { color: var(--accent); font-weight: bold; font-family: var(--mono); }
     .label { color: var(--muted); }
     .msg-details { display: none; padding-top: 0.8rem; }
     .msg-section { margin-top: 0.8rem; }
@@ -267,30 +262,12 @@
     .trace-summary { color: var(--ink); flex: 1 1 auto; }
     .trace-count { color: var(--muted); font-size: 0.8em; }
     .trace-body { padding: 0 0.9rem 0.7rem 0.9rem; }
-    .trace-step {
-      display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.35rem 0;
-      border-top: 1px solid var(--line);
-    }
-    .trace-step:first-child { border-top: none; }
-    .badge {
-      display: inline-block; min-width: 70px; text-align: center; font-size: 0.7rem;
-      font-weight: bold; padding: 2px 6px; border-radius: 999px; color: #fff; flex-shrink: 0;
-    }
-    /* Category chips: fixed vivid hues (AA with white text) so each stage of a
-     * trace reads distinctly, with brand tokens where they map cleanly. */
-    .badge.utterance { background: #2e7d32; }
-    .badge.pipeline  { background: #1565c0; }
-    .badge.skill     { background: #6a1b9a; }
-    .badge.output    { background: #ef6c00; }
-    .badge.other     { background: var(--muted); }
-    .trace-step .msg { flex: 1 1 auto; margin-bottom: 0; }
-
     /* ─── the "now" readout: what the assistant is doing, inferred live ──────
      * The instrument needle. One line, updated from the latest classified
      * traffic, announced politely to assistive tech. */
     .now {
-      display: flex; align-items: center; gap: 0.6rem;
-      margin: 0 0 1rem; padding: 0.7rem 1rem;
+      display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
+      margin-bottom: 0.7rem; padding: 0.4rem 0.8rem;
       background: var(--card); border: 1px solid var(--line);
       border-left: 3px solid var(--muted); border-radius: var(--radius); box-shadow: var(--shadow);
     }
@@ -363,23 +340,6 @@
     .session-panel > summary { cursor: pointer; color: var(--ink); font-weight: 600; font-size: 0.9rem; }
     .session-panel textarea { background: var(--card-soft); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px; font-family: var(--mono); font-size: 0.85rem; width: 100%; min-height: 70px; resize: vertical; margin-top: 0.4rem; }
 
-    /* ─── compact message card (native <details>, keyboard-operable) ──────────*/
-    details.msg { padding: 0; cursor: default; }
-    details.msg > summary.msg-head {
-      list-style: none; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;
-      padding: 0.55rem 0.75rem; flex-wrap: wrap;
-    }
-    details.msg > summary::-webkit-details-marker { display: none; }
-    details.msg > summary.msg-head::before { content: '▶'; color: var(--muted); font-size: 0.7em; flex: 0 0 auto; }
-    details.msg[open] > summary.msg-head::before { content: '▼'; }
-    .msg-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
-    details.msg .msg-type { flex: 0 1 auto; }
-    .msg-time { margin-left: auto; color: var(--muted); font-size: 0.78rem; font-family: var(--mono); flex: 0 0 auto; }
-    .meta-chip { font-size: 0.72rem; background: var(--card-soft); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; color: var(--muted); font-family: var(--mono); }
-    details.msg.error { border-left: 3px solid var(--bad); }
-    .msg-body { padding: 0 0.75rem 0.7rem; }
-    .copy-json { float: right; }
-
     /* ─── responsive: below 640px, tuck filters/data behind their panels ─────*/
     @media (max-width: 640px) {
       body { padding: 0.6rem; }
@@ -391,7 +351,6 @@
     }
 
     /* ─── DevTools-style dense log ───────────────────────────────────────────*/
-    .now { padding: 0.4rem 0.8rem; margin-bottom: 0.7rem; flex-wrap: wrap; }
     .toolbar { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 8px; margin-bottom: 0.7rem; box-shadow: var(--shadow); }
     .tbar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
     .tbar.filt { margin-top: 6px; }
@@ -424,7 +383,10 @@
     .lhead:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
     .lrow.open > .lhead { background: var(--card-soft); }
     .lt { color: var(--muted); flex: 0 0 auto; font-size: 0.76rem; }
-    .lty { color: var(--accent); font-weight: 600; cursor: pointer; flex: 0 0 auto; }
+    .lty {
+      color: var(--accent); font-weight: 600; cursor: pointer; flex: 0 0 auto;
+      min-width: 16ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
     .lty:hover { text-decoration: underline; }
     .lx { color: var(--muted); background: var(--card-soft); border: 1px solid var(--line); border-radius: 6px; padding: 0 5px; font-size: 0.7rem; flex: 0 0 auto; }
     .ld { color: var(--ink); opacity: 0.82; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -553,7 +515,7 @@
     <label class="inline-label">Context JSON (optional):</label>
   </div>
   <textarea id="inject-context" aria-label="Inject context JSON (optional)">{}</textarea>
-  <div>
+  <div class="row" style="margin-top:0.5rem;">
     <label class="inline-label"><input type="checkbox" id="inject-attach-session"> attach the Session below</label>
     <button class="btn danger" onclick="injectMessage()">⚡ Send message</button>
     <span id="inject-status" class="inject-status"></span>
@@ -633,7 +595,7 @@
       <a href="https://openvoiceos.github.io/ovos-technical-manual/">Technical manual</a></p>
   </div>
   <div class="foot-actions">
-    <button class="btn" onclick="window.open('https://github.com/OpenVoiceOS/ovos-busmon/issues','_blank')">Report Issue</button>
+    <button class="btn secondary" onclick="window.open('https://github.com/OpenVoiceOS/ovos-busmon/issues','_blank')">Report Issue</button>
   </div>
 </footer>
 
@@ -721,6 +683,10 @@ let paused = false;
 let nextId = 0;
 let viewMode = 'flat'; // 'flat' | 'timeline'
 let droppedCount = 0;
+// Memoization for classifyMessage/isNoise lives off-object so exported/copied
+// raw bus messages never carry synthetic fields (see classifyMessage/isNoise).
+const _catCache = new WeakMap();
+const _noiseCache = new WeakMap();
 
 // Tiny vendored JSON syntax highlighter (regex tokenizer over
 // JSON.stringify output) — replaces the Prism.js CDN dependency so the UI
@@ -819,7 +785,12 @@ function connectSSE() {
   if (_sseSource) _sseSource.close();
   _sseSource = new EventSource(withToken('api/stream'));
   _sseSource.onopen  = () => { setBadge('sse', 'SSE (service)'); setWaveLive(); };
-  _sseSource.onerror = () => { setBadge('err', 'SSE error — reconnecting…'); setWaveDown(); };
+  _sseSource.onerror = () => {
+    setWaveDown();
+    authFetch('api/status', {signal: AbortSignal.timeout(1500)})
+      .then(r => setBadge('err', r.status === 401 ? 'Auth failed — check token' : 'SSE error — reconnecting…'))
+      .catch(() => setBadge('err', 'SSE error — reconnecting…'));
+  };
   _sseSource.addEventListener('message', e => {
     try {
       const msg = JSON.parse(e.data);
@@ -1086,10 +1057,10 @@ const NOISE_GLOBS = [
 ];
 let showNoise = false;
 function isNoise(m) {
-  if (m && m._noise !== undefined) return m._noise;
+  if (m && typeof m === 'object' && _noiseCache.has(m)) return _noiseCache.get(m);
   const t = String((m && m.type) || '');
   const r = NOISE_GLOBS.some(g => globMatch(t, g));
-  if (m) m._noise = r;
+  if (m && typeof m === 'object') _noiseCache.set(m, r);
   return r;
 }
 function noiseCount() { return messages.reduce((n, m) => n + (isNoise(m) ? 1 : 0), 0); }
@@ -1232,7 +1203,7 @@ function copyMsg(ev, id) {
 // compute once and cache on the message — filteredMessages/updateCounts/
 // coalesce/updateNow otherwise recompute these O(n) scans 3–4x per render.
 function classifyMessage(msg) {
-  if (msg && msg._cat !== undefined) return msg._cat;
+  if (msg && typeof msg === 'object' && _catCache.has(msg)) return _catCache.get(msg);
   const t = String((msg && msg.type) || '').toLowerCase();
   let cat;
   // Errors first, so 'complete_intent_failure' reads as error, not pipeline.
@@ -1244,7 +1215,7 @@ function classifyMessage(msg) {
   else if (t.startsWith('skill') || t.includes('.activate') || t.includes('mycroft.skill') ||
       t.includes('handler')) cat = 'skill';
   else cat = 'other';
-  if (msg) msg._cat = cat;
+  if (msg && typeof msg === 'object') _catCache.set(msg, cat);
   return cat;
 }
 
@@ -1360,7 +1331,11 @@ function render(isLive) {
   const reopen = () => {
     openMids.forEach(id => {
       const r = log.querySelector('.lrow[data-mid="' + id + '"]');
-      if (r) { r.classList.add('open'); const b = r.querySelector('.lbody'); if (b) b.style.display = 'block'; }
+      if (r) {
+        r.classList.add('open');
+        const b = r.querySelector('.lbody'); if (b) b.style.display = 'block';
+        const h = r.querySelector('.lhead'); if (h) h.setAttribute('aria-expanded', 'true');
+      }
     });
     openSecs.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'block'; });
   };
