@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1a6](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a6) (2026-08-13)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a5...0.1.1a6)
+
+**Merged pull requests:**
+
+- fix: audit-loop wave 3 \(noise-aware empty state, a11y labels\) [\#29](https://github.com/OpenVoiceOS/ovos-busmon/pull/29) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.1.1a5](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a5) (2026-08-13)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a4...0.1.1a5)
