@@ -243,6 +243,14 @@
       border-radius: var(--radius-sm); padding: 6px 10px; font-size: 0.9em;
     }
     .chat-session-id { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); margin-top: 0.4rem; }
+    .chat-trace { align-self: flex-start; max-width: 100%; margin: -0.2rem 0 0.2rem; }
+    .chat-trace-btn { background: none; border: none; color: var(--muted); font-family: var(--mono); font-size: 0.7rem; cursor: pointer; padding: 0 0 0 0.2rem; min-height: 0; }
+    .chat-trace-btn:hover { color: var(--accent); }
+    .chat-trace-body { margin: 2px 0 0 0.4rem; border-left: 1px solid var(--line); padding-left: 0.5rem; }
+    .ctrace-row { display: flex; align-items: center; gap: 0.35rem; font-family: var(--mono); font-size: 0.72rem; color: var(--muted); padding: 1px 0; }
+    .ctrace-row .chip-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+    .ctrace-row code { color: var(--accent); }
+    .ctrace-det { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     /* Timeline view */
     .trace {
@@ -347,6 +355,9 @@
     .inline-label { color: var(--muted); font-size: 0.85rem; align-self: center; }
     .inject-status.ok  { color: var(--ok); }
     .inject-status.err { color: var(--bad); }
+    .session-panel { background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--accent-strong); border-radius: var(--radius); padding: 0.8rem 1rem; margin-bottom: 0.8rem; text-align: left; box-shadow: var(--shadow); }
+    .session-panel > summary { cursor: pointer; color: var(--ink); font-weight: 600; font-size: 0.9rem; }
+    .session-panel textarea { background: var(--card-soft); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px; font-family: var(--mono); font-size: 0.85rem; width: 100%; min-height: 70px; resize: vertical; margin-top: 0.4rem; }
 
     /* ─── compact message card (native <details>, keyboard-operable) ──────────*/
     details.msg { padding: 0; cursor: default; }
@@ -538,8 +549,43 @@
   </div>
   <textarea id="inject-context">{}</textarea>
   <div>
+    <label class="inline-label"><input type="checkbox" id="inject-attach-session"> attach the Session below</label>
     <button class="btn danger" onclick="injectMessage()">⚡ Send message</button>
     <span id="inject-status" class="inject-status"></span>
+  </div>
+</details>
+
+<!-- Session editor: build the OVOS Session declared per-message. -->
+<details class="session-panel">
+  <summary>🧩 Session — declare the session attached to injects &amp; chat</summary>
+  <p class="hint-link">OVOS sessions travel per message; the client declares them. Build one here to test how the
+    core behaves under a given session. Click a <code>session=</code> value in a row, or use <b>Load session</b> on
+    an expanded row, to seed this from live traffic.</p>
+  <div class="row" style="margin-top:0.5rem;">
+    <label class="field" style="flex:1 1 150px;"><span>session_id</span><input type="text" id="sess-id" class="input sm"></label>
+    <label class="field" style="flex:1 1 120px;"><span>lang</span>
+      <select id="sess-lang" class="input sm">
+        <option value="">(default)</option>
+        <option>en-US</option><option>en-GB</option><option>pt-PT</option><option>pt-BR</option>
+        <option>es-ES</option><option>de-DE</option><option>fr-FR</option><option>it-IT</option>
+        <option>nl-NL</option><option>ca-ES</option><option>gl-ES</option><option>eu-ES</option>
+      </select>
+    </label>
+    <label class="field" style="flex:1 1 130px;"><span>site_id</span><input type="text" id="sess-site" class="input sm" placeholder="e.g. kitchen"></label>
+    <label class="field" style="flex:1 1 120px;"><span>system_unit</span>
+      <select id="sess-unit" class="input sm"><option value="">(default)</option><option>metric</option><option>imperial</option></select>
+    </label>
+  </div>
+  <div class="row" style="margin-top:0.5rem;">
+    <label class="field" style="flex:1 1 100%;"><span>pipeline — comma-separated matcher ids, blank = core default</span>
+      <input type="text" id="sess-pipeline" class="input sm" placeholder="e.g. stop_high, padatious_high, fallback_low"></label>
+  </div>
+  <details class="more"><summary>Advanced — merge raw session JSON</summary>
+    <textarea id="sess-advanced" placeholder="{}"></textarea>
+  </details>
+  <div style="margin-top:0.5rem;">
+    <button class="btn secondary sm" onclick="clearSession()">Clear</button>
+    <span class="inline-label" id="sess-status"></span>
   </div>
 </details>
 
@@ -552,7 +598,7 @@
   <!-- Chat panel: converse with the assistant over one stable Session. -->
   <div class="chat-panel" id="chat-panel">
     <h2>💬 Chat</h2>
-    <div class="chat-hint">Requires service mode (SSE) — sends via the authenticated <code>/api/chat</code> endpoint.</div>
+    <div class="chat-hint">Requires service mode (SSE). Chats under the <b>Session</b> above when it is filled; expand <b>trace</b> under a turn to see the bus events it produced.</div>
     <div class="chat-log" id="chat-log"></div>
     <div class="chat-input-row">
       <input type="text" id="chat-input" placeholder="Type a message…" autocomplete="off">
@@ -872,6 +918,10 @@ async function injectMessage() {
   catch(e) { setInjectStatus('err', '✗ invalid data JSON: ' + e.message); return; }
   try { context = JSON.parse(contextStr || '{}'); }
   catch(e) { setInjectStatus('err', '✗ invalid context JSON: ' + e.message); return; }
+  if (document.getElementById('inject-attach-session').checked) {
+    try { const s = buildSession(); if (Object.keys(s).length) context.session = s; }
+    catch(e) { setInjectStatus('err', '✗ ' + e.message); return; }
+  }
   const r = await sendToBus(msgType, payload, context);
   setInjectStatus(r.ok ? 'ok' : 'err', r.ok ? '✓ sent' : '✗ ' + r.error);
 }
@@ -925,6 +975,52 @@ function applyPreset(key) {
   if (!p) return;
   document.getElementById('inject-type').value = p.type;
   document.getElementById('inject-payload').value = JSON.stringify(p.data, null, 2);
+}
+
+// ─── Session editor (Track A2) ────────────────────────────────────────────────
+// Builds the OVOS Session dict that travels in context["session"].
+function _v(id) { const e = document.getElementById(id); return e ? e.value.trim() : ''; }
+function buildSession() {
+  const s = {};
+  if (_v('sess-id'))   s.session_id  = _v('sess-id');
+  if (_v('sess-lang')) s.lang        = _v('sess-lang');
+  if (_v('sess-site')) s.site_id     = _v('sess-site');
+  if (_v('sess-unit')) s.system_unit = _v('sess-unit');
+  const pipe = _v('sess-pipeline').split(',').map(x => x.trim()).filter(Boolean);
+  if (pipe.length) s.pipeline = pipe;
+  const adv = _v('sess-advanced');
+  if (adv) {
+    let extra;
+    try { extra = JSON.parse(adv); }
+    catch (e) { throw new Error('Advanced session JSON: ' + e.message); }
+    Object.assign(s, extra);
+  }
+  return s;
+}
+const _SESS_KNOWN = {session_id: 'sess-id', lang: 'sess-lang', site_id: 'sess-site', system_unit: 'sess-unit'};
+function loadSessionIntoEditor(sd) {
+  if (!sd || typeof sd !== 'object') return;
+  document.getElementById('sess-id').value   = sd.session_id  || '';
+  document.getElementById('sess-lang').value = sd.lang        || '';
+  document.getElementById('sess-site').value = sd.site_id     || '';
+  document.getElementById('sess-unit').value = sd.system_unit || '';
+  document.getElementById('sess-pipeline').value = Array.isArray(sd.pipeline) ? sd.pipeline.join(', ') : '';
+  const rest = {};
+  for (const k in sd) if (!(k in _SESS_KNOWN) && k !== 'pipeline') rest[k] = sd[k];
+  document.getElementById('sess-advanced').value = Object.keys(rest).length ? JSON.stringify(rest, null, 2) : '';
+  const p = document.querySelector('.session-panel'); if (p) p.open = true;
+  const st = document.getElementById('sess-status');
+  if (st) { st.textContent = 'loaded session ' + (sd.session_id || '(anonymous)'); setTimeout(() => st.textContent = '', 3000); }
+}
+function clearSession() {
+  ['sess-id', 'sess-site', 'sess-pipeline', 'sess-advanced'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('sess-lang').value = '';
+  document.getElementById('sess-unit').value = '';
+}
+function loadRowSession(ev, id) {
+  ev.stopPropagation();
+  const m = findMsg(id);
+  if (m) loadSessionIntoEditor(m.session_data || {});
 }
 
 // ─── Render ───────────────────────────────────────────────────────────────────
@@ -1186,6 +1282,7 @@ function rowHtml(item) {
         <button class="btn secondary copyb" onclick="copyMsg(event, '${msg.id}')">Copy JSON</button>
         <button class="btn secondary copyb" onclick="resendMsg(event, '${msg.id}')" title="Re-inject this exact message onto the bus">Resend</button>
         <button class="btn secondary copyb" onclick="editMsg(event, '${msg.id}')" title="Load into the inject panel to edit before sending">Edit &amp; send</button>
+        ${(msg.session_data && Object.keys(msg.session_data).length) ? `<button class="btn secondary copyb" onclick="loadRowSession(event, '${msg.id}')" title="Load this message's session into the Session editor">Load session</button>` : ''}
       </div>
       ${sections || '<div class="label" style="font-size:0.78rem;">No data or context on this message.</div>'}
     </div>
@@ -1416,6 +1513,9 @@ function getChatSessionId() {
 
 const chatSessionId = getChatSessionId();
 document.getElementById('chat-session-id-label').textContent = chatSessionId;
+// Every session id we have chatted under — a reply correlates if it carries any
+// of these (the Session editor can send under a custom id).
+const chatSessionIds = new Set([chatSessionId]);
 
 let chatOpen = false;
 
@@ -1446,20 +1546,51 @@ async function sendChat() {
     appendChatBubble('error', 'Chat requires service (SSE) mode — this page is in direct WebSocket mode.');
     return;
   }
+  // Chat under the Session declared in the editor (if any), else the default id.
+  let session = null, sid = chatSessionId, lang = 'en-US';
+  try {
+    const s = buildSession();
+    if (Object.keys(s).length) { session = s; if (s.session_id) sid = s.session_id; if (s.lang) lang = s.lang; }
+  } catch (e) { appendChatBubble('error', e.message); return; }
+  chatSessionIds.add(sid);
+  document.getElementById('chat-session-id-label').textContent = sid;
+
   appendChatBubble('me', text);
+  addTurnTrace(sid);        // an expandable "trace" for this turn's bus events
   input.value = '';
   try {
     const resp = await authFetch('api/chat', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({utterance: text, lang: 'en-us', session_id: chatSessionId}),
+      body: JSON.stringify({utterance: text, lang: lang, session_id: sid, session: session}),
     });
-    if (!resp.ok) {
-      appendChatBubble('error', 'Send failed: ' + await resp.text());
-    }
+    if (!resp.ok) appendChatBubble('error', 'Send failed: ' + await resp.text());
   } catch (e) {
     appendChatBubble('error', 'Send failed: ' + e.message);
   }
+}
+
+// Append a collapsible per-turn trace of the bus events for one chat turn,
+// built client-side from captured traffic (no new bus messages).
+function addTurnTrace(sid) {
+  const log = document.getElementById('chat-log');
+  const wrap = document.createElement('div');
+  wrap.className = 'chat-trace';
+  const since = String(nowMs());
+  wrap.innerHTML = `<button class="chat-trace-btn" data-sid="${escA(sid)}" data-since="${since}">▶ trace</button>` +
+                   `<div class="chat-trace-body" style="display:none"></div>`;
+  log.appendChild(wrap);
+  log.scrollTop = log.scrollHeight;
+}
+function nowMs() { try { return Date.parse(new Date().toISOString()); } catch (e) { return 0; } }
+
+function renderTurnTrace(bodyEl, sid, sinceMs) {
+  const rows = messages
+    .filter(m => m.session === sid && Date.parse(m.timestamp) >= sinceMs)
+    .sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
+  bodyEl.innerHTML = rows.length
+    ? rows.map(m => `<div class="ctrace-row"><span class="chip-dot cat-${classifyMessage(m)}"></span><code>${esc(m.type)}</code> <span class="ctrace-det">${esc(detailOf(m))}</span></div>`).join('')
+    : '<div class="label" style="font-size:0.74rem;">no bus events captured for this turn yet</div>';
 }
 
 document.getElementById('chat-input').addEventListener('keydown', e => {
@@ -1470,7 +1601,7 @@ document.getElementById('chat-input').addEventListener('keydown', e => {
 // when they belong to *this* browser session — every other bus message
 // keeps flowing through the normal log/timeline unaffected.
 function handleChatReply(msg) {
-  if (msg.session !== chatSessionId) return;
+  if (!chatSessionIds.has(msg.session)) return;
   const t = String(msg.type || '').toLowerCase();
   if (t === 'ovos.utterance.speak' || t === 'speak') {
     const utt = (msg.data && msg.data.utterance) || '';
@@ -1478,7 +1609,25 @@ function handleChatReply(msg) {
   } else if (t === 'complete_intent_failure') {
     appendChatBubble('error', 'No response (complete_intent_failure)');
   }
+  // Refresh any open turn-traces for this session so events stream in live.
+  document.querySelectorAll('.chat-trace-btn.open').forEach(btn => {
+    if (btn.dataset.sid === msg.session) {
+      renderTurnTrace(btn.nextElementSibling, msg.session, Number(btn.dataset.since));
+    }
+  });
 }
+
+// Delegated: toggle a chat turn's bus-event trace.
+document.getElementById('chat-log').addEventListener('click', e => {
+  const btn = e.target.closest('.chat-trace-btn');
+  if (!btn) return;
+  const body = btn.nextElementSibling;
+  const open = body.style.display === 'block';
+  body.style.display = open ? 'none' : 'block';
+  btn.classList.toggle('open', !open);
+  btn.textContent = (open ? '▶' : '▼') + ' trace';
+  if (!open) renderTurnTrace(body, btn.dataset.sid, Number(btn.dataset.since));
+});
 
 // ─── Filter listeners ─────────────────────────────────────────────────────────
 ['filter','search','session_filter','source_filter','dest_filter','sort']
