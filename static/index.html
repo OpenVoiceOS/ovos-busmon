@@ -1086,8 +1086,11 @@ const NOISE_GLOBS = [
 ];
 let showNoise = false;
 function isNoise(m) {
-  const t = String(m.type || '');
-  return NOISE_GLOBS.some(g => globMatch(t, g));
+  if (m && m._noise !== undefined) return m._noise;
+  const t = String((m && m.type) || '');
+  const r = NOISE_GLOBS.some(g => globMatch(t, g));
+  if (m) m._noise = r;
+  return r;
 }
 function noiseCount() { return messages.reduce((n, m) => n + (isNoise(m) ? 1 : 0), 0); }
 function toggleNoise() { showNoise = !showNoise; render(); }
@@ -1225,17 +1228,24 @@ function copyMsg(ev, id) {
 // interaction (utterance → pipeline/intent → skill handler → speak/audio)
 // renders as a single collapsible group.
 
+// A message's category and noise flag depend only on its (immutable) type, so
+// compute once and cache on the message — filteredMessages/updateCounts/
+// coalesce/updateNow otherwise recompute these O(n) scans 3–4x per render.
 function classifyMessage(msg) {
-  const t = String(msg.type || '').toLowerCase();
+  if (msg && msg._cat !== undefined) return msg._cat;
+  const t = String((msg && msg.type) || '').toLowerCase();
+  let cat;
   // Errors first, so 'complete_intent_failure' reads as error, not pipeline.
-  if (t.includes('error') || t.includes('failure') || t.includes('exception')) return 'error';
-  if (t === 'recognizer_loop:utterance') return 'utterance';
-  if (t.includes('speak') || t.includes('audio') || t.includes('tts')) return 'output';
-  if (t.includes('intent') || t.startsWith('ovos.pipeline') || t.includes('padatious') ||
-      t.includes('adapt') || t.includes('common_query')) return 'pipeline';
-  if (t.startsWith('skill') || t.includes('.activate') || t.includes('mycroft.skill') ||
-      t.includes('handler')) return 'skill';
-  return 'other';
+  if (t.includes('error') || t.includes('failure') || t.includes('exception')) cat = 'error';
+  else if (t === 'recognizer_loop:utterance') cat = 'utterance';
+  else if (t.includes('speak') || t.includes('audio') || t.includes('tts')) cat = 'output';
+  else if (t.includes('intent') || t.startsWith('ovos.pipeline') || t.includes('padatious') ||
+      t.includes('adapt') || t.includes('common_query')) cat = 'pipeline';
+  else if (t.startsWith('skill') || t.includes('.activate') || t.includes('mycroft.skill') ||
+      t.includes('handler')) cat = 'skill';
+  else cat = 'other';
+  if (msg) msg._cat = cat;
+  return cat;
 }
 
 function correlationKey(msg) {
