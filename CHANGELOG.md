@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1a23](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a23) (2026-08-13)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a22...0.1.1a23)
+
+**Merged pull requests:**
+
+- fix: busmon UX polish \(coarse-pointer targets, search scope + debounce\) [\#63](https://github.com/OpenVoiceOS/ovos-busmon/pull/63) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.1.1a22](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a22) (2026-08-13)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a21...0.1.1a22)
