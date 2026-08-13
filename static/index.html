@@ -851,11 +851,17 @@ function connectWS() {
   if (_ws) { try { _ws.close(); } catch(e) {} }
   const url = wsUrl();
   setBadge('', 'connecting to ' + url + '…');
-  _ws = new WebSocket(url);
-  _ws.onopen  = () => { setBadge('ws', 'WS → ' + url); setWaveLive(); };
-  _ws.onerror = () => { setBadge('err', 'WS error'); setWaveDown(); };
-  _ws.onclose = () => { setBadge('err', 'WS closed — reconnecting in 3s…'); setWaveDown(); setTimeout(connectWS, 3000); };
-  _ws.onmessage = e => {
+  // WebSocket.close() is asynchronous: a superseded socket still fires close
+  // (and can still deliver messages) after _ws has moved on. Guard every
+  // handler on socket identity so a stale socket cannot stomp the live one's
+  // UI or schedule a spurious reconnect.
+  const sock = new WebSocket(url);
+  _ws = sock;
+  sock.onopen  = () => { if (sock !== _ws) return; setBadge('ws', 'WS → ' + url); setWaveLive(); };
+  sock.onerror = () => { if (sock !== _ws) return; setBadge('err', 'WS error'); setWaveDown(); };
+  sock.onclose = () => { if (sock !== _ws) return; setBadge('err', 'WS closed — reconnecting in 3s…'); setWaveDown(); setTimeout(connectWS, 3000); };
+  sock.onmessage = e => {
+    if (sock !== _ws) return;
     try {
       const raw = JSON.parse(e.data);
       pushMessage(normaliseBusFrame(raw));
@@ -948,9 +954,9 @@ function findMsg(id) { return messages.find(x => String(x.id) === String(id)); }
 // Resend a captured message exactly as it was seen.
 async function resendMsg(ev, id) {
   ev.stopPropagation();
-  const m = findMsg(id);
-  if (!m) return;
   const btn = ev.currentTarget, o = btn.textContent;
+  const m = findMsg(id);
+  if (!m) { btn.textContent = 'Not buffered'; setTimeout(() => { btn.textContent = o; }, 1400); return; }
   const r = await sendToBus(m.type, m.data || {}, reconstructContext(m));
   btn.textContent = r.ok ? 'Resent ✓' : 'Failed ✗';
   setTimeout(() => { btn.textContent = o; }, 1400);
@@ -960,7 +966,7 @@ async function resendMsg(ev, id) {
 function editMsg(ev, id) {
   ev.stopPropagation();
   const m = findMsg(id);
-  if (!m) return;
+  if (!m) { setInjectStatus('err', 'that message is no longer buffered'); return; }
   document.getElementById('inject-type').value = m.type;
   document.getElementById('inject-payload').value = JSON.stringify(m.data || {}, null, 2);
   document.getElementById('inject-context').value = JSON.stringify(reconstructContext(m), null, 2);
@@ -1028,7 +1034,9 @@ function clearSession() {
 function loadRowSession(ev, id) {
   ev.stopPropagation();
   const m = findMsg(id);
-  if (m) loadSessionIntoEditor(m.session_data || {});
+  if (m) { loadSessionIntoEditor(m.session_data || {}); return; }
+  const st = document.getElementById('sess-status');
+  if (st) { st.textContent = 'that message is no longer buffered'; setTimeout(() => st.textContent = '', 3000); }
 }
 
 // ─── Render ───────────────────────────────────────────────────────────────────
@@ -1196,9 +1204,9 @@ function updateNow() {
 }
 function copyMsg(ev, id) {
   ev.stopPropagation();
-  const m = messages.find(x => String(x.id) === String(id));
-  if (!m) return;
   const btn = ev.currentTarget;
+  const m = messages.find(x => String(x.id) === String(id));
+  if (!m) { const o = btn.textContent; btn.textContent = 'Not buffered'; setTimeout(() => { btn.textContent = o; }, 1400); return; }
   const restore = () => { const o = btn.textContent; btn.textContent = 'Copied ✓'; setTimeout(() => btn.textContent = o, 1200); };
   if (navigator.clipboard) navigator.clipboard.writeText(JSON.stringify(m, null, 2)).then(restore).catch(() => {});
 }
