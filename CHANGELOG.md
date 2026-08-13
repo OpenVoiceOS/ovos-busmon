@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1a8](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a8) (2026-08-13)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a7...0.1.1a8)
+
+**Merged pull requests:**
+
+- fix: audit-loop wave 5 \(async-client connected check; Export JSON full buffer\) [\#33](https://github.com/OpenVoiceOS/ovos-busmon/pull/33) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.1.1a7](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a7) (2026-08-13)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a6...0.1.1a7)
