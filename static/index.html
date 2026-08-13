@@ -417,7 +417,8 @@
     .lrow.error .lty { color: var(--bad); }
     .lrow.error { background: color-mix(in srgb, var(--bad) 5%, transparent); }
     .lbody { padding: 8px 12px 12px 16px; background: var(--card-soft); border-top: 1px solid var(--line); }
-    .copyb { min-height: 0; padding: 0.15rem 0.55rem; font-size: 0.72rem; margin: 0 0 6px; }
+    .lbody-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+    .copyb { min-height: 0; padding: 0.15rem 0.55rem; font-size: 0.72rem; margin: 0; }
 
     @media (max-width: 640px) {
       .lhead { flex-wrap: wrap; white-space: normal; }
@@ -519,6 +520,15 @@
     <a href="https://openvoiceos.github.io/ovos-technical-manual/" target="_blank" rel="noopener">Technical manual</a>.
     For a normal conversation instead of one raw message, use <a href="#" onclick="toggleChat();return false;">Chat →</a></p>
   <div class="row" style="margin-top:0.5rem;">
+    <select id="inject-preset" class="input sm" style="flex:0 1 190px;" onchange="applyPreset(this.value); this.value='';" title="Fill a common message type">
+      <option value="">Preset…</option>
+      <option value="speak">speak</option>
+      <option value="recognizer_loop:utterance">recognizer_loop:utterance</option>
+      <option value="mycroft.mic.listen">mycroft.mic.listen</option>
+      <option value="mycroft.mic.mute">mycroft.mic.mute</option>
+      <option value="mycroft.stop">mycroft.stop</option>
+      <option value="ovos.session.update">ovos.session.update</option>
+    </select>
     <input type="text" id="inject-type" class="input" placeholder="Message type (e.g. speak)" style="flex:0 1 240px;">
     <label class="inline-label">Payload JSON (data):</label>
   </div>
@@ -828,39 +838,93 @@ function normaliseBusFrame(raw) {
 }
 
 // ─── Inject ───────────────────────────────────────────────────────────────────
+// Core emit, shared by the inject panel and by row Resend/Edit-and-send.
+// The service rebroadcasts what it emits, so a sent message reappears in the
+// live stream like any other. Returns {ok, error}.
+async function sendToBus(type, data, context) {
+  if (transportMode === 'sse') {
+    const resp = await authFetch('api/send', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({type: type, data: data, context: context}),
+    });
+    return resp.ok ? {ok: true} : {ok: false, error: await resp.text()};
+  }
+  if (!_ws || _ws.readyState !== WebSocket.OPEN) return {ok: false, error: 'WebSocket not connected'};
+  _ws.send(JSON.stringify({type: type, data: data, context: context}));
+  return {ok: true};
+}
+
+function setInjectStatus(kind, text) {
+  const status = document.getElementById('inject-status');
+  status.textContent = text;
+  status.className = 'inject-status' + (kind ? ' ' + kind : '');
+  if (kind === 'ok') setTimeout(() => { status.textContent = ''; status.className = 'inject-status'; }, 3000);
+}
+
 async function injectMessage() {
   const msgType = document.getElementById('inject-type').value.trim();
   const payloadStr = document.getElementById('inject-payload').value.trim();
   const contextStr = document.getElementById('inject-context').value.trim();
-  const status = document.getElementById('inject-status');
-  if (!msgType) { status.textContent = '✗ message type is required'; status.className='inject-status err'; return; }
-
+  if (!msgType) { setInjectStatus('err', '✗ message type is required'); return; }
   let payload, context;
   try { payload = JSON.parse(payloadStr || '{}'); }
-  catch(e) { status.textContent = '✗ invalid data JSON: ' + e.message; status.className='inject-status err'; return; }
+  catch(e) { setInjectStatus('err', '✗ invalid data JSON: ' + e.message); return; }
   try { context = JSON.parse(contextStr || '{}'); }
-  catch(e) { status.textContent = '✗ invalid context JSON: ' + e.message; status.className='inject-status err'; return; }
+  catch(e) { setInjectStatus('err', '✗ invalid context JSON: ' + e.message); return; }
+  const r = await sendToBus(msgType, payload, context);
+  setInjectStatus(r.ok ? 'ok' : 'err', r.ok ? '✓ sent' : '✗ ' + r.error);
+}
 
-  if (transportMode === 'sse') {
-    // Mode 2 — POST to API. The service's own bus listener rebroadcasts
-    // whatever it emits, so the sent message reappears in the live stream
-    // like any other — no special-casing needed here.
-    const resp = await authFetch('api/send', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({type: msgType, data: payload, context: context}),
-    });
-    if (resp.ok) { status.textContent = '✓ sent'; status.className='inject-status ok'; }
-    else { status.textContent = '✗ ' + await resp.text(); status.className='inject-status err'; }
-  } else {
-    // Mode 1 — send directly on the WebSocket
-    if (!_ws || _ws.readyState !== WebSocket.OPEN) {
-      status.textContent = '✗ WebSocket not connected'; status.className='inject-status err'; return;
-    }
-    _ws.send(JSON.stringify({type: msgType, data: payload, context: context}));
-    status.textContent = '✓ sent'; status.className='inject-status ok';
-  }
-  setTimeout(() => { status.textContent = ''; status.className = 'inject-status'; }, 3000);
+// Rebuild the original bus context of a captured message (the collector splits
+// session/source/destination out of context on the way in).
+function reconstructContext(m) {
+  const ctx = Object.assign({}, m.context || {});
+  if (m.source) ctx.source = m.source;
+  if (m.destination) ctx.destination = m.destination.indexOf(',') !== -1 ? m.destination.split(',') : m.destination;
+  if (m.session_data && Object.keys(m.session_data).length) ctx.session = m.session_data;
+  return ctx;
+}
+function findMsg(id) { return messages.find(x => String(x.id) === String(id)); }
+
+// Resend a captured message exactly as it was seen.
+async function resendMsg(ev, id) {
+  ev.stopPropagation();
+  const m = findMsg(id);
+  if (!m) return;
+  const btn = ev.currentTarget, o = btn.textContent;
+  const r = await sendToBus(m.type, m.data || {}, reconstructContext(m));
+  btn.textContent = r.ok ? 'Resent ✓' : 'Failed ✗';
+  setTimeout(() => { btn.textContent = o; }, 1400);
+}
+
+// Load a captured message into the inject panel to tweak before sending.
+function editMsg(ev, id) {
+  ev.stopPropagation();
+  const m = findMsg(id);
+  if (!m) return;
+  document.getElementById('inject-type').value = m.type;
+  document.getElementById('inject-payload').value = JSON.stringify(m.data || {}, null, 2);
+  document.getElementById('inject-context').value = JSON.stringify(reconstructContext(m), null, 2);
+  const panel = document.querySelector('.inject-panel');
+  if (panel) { panel.open = true; panel.scrollIntoView({behavior: 'smooth', block: 'center'}); }
+  setInjectStatus('', 'loaded from ' + m.type + ' — edit and Send');
+}
+
+// Inject panel presets: fill a common type + a skeleton payload.
+const INJECT_PRESETS = {
+  'speak': {type: 'speak', data: {utterance: 'hello world', lang: 'en-US'}},
+  'recognizer_loop:utterance': {type: 'recognizer_loop:utterance', data: {utterances: ['what time is it'], lang: 'en-US'}},
+  'mycroft.mic.listen': {type: 'mycroft.mic.listen', data: {}},
+  'mycroft.mic.mute': {type: 'mycroft.mic.mute', data: {}},
+  'mycroft.stop': {type: 'mycroft.stop', data: {}},
+  'ovos.session.update': {type: 'ovos.session.update', data: {}},
+};
+function applyPreset(key) {
+  const p = INJECT_PRESETS[key];
+  if (!p) return;
+  document.getElementById('inject-type').value = p.type;
+  document.getElementById('inject-payload').value = JSON.stringify(p.data, null, 2);
 }
 
 // ─── Render ───────────────────────────────────────────────────────────────────
@@ -1118,7 +1182,11 @@ function rowHtml(item) {
       ${msg.destination ? `<span class="lroute" data-pick="dest_filter" data-val="${escA(msg.destination)}" title="filter by destination">→ ${esc(msg.destination)}</span>` : ''}
     </div>
     <div class="lbody" style="display:none">
-      <button class="btn secondary copyb" onclick="copyMsg(event, '${msg.id}')">Copy JSON</button>
+      <div class="lbody-actions">
+        <button class="btn secondary copyb" onclick="copyMsg(event, '${msg.id}')">Copy JSON</button>
+        <button class="btn secondary copyb" onclick="resendMsg(event, '${msg.id}')" title="Re-inject this exact message onto the bus">Resend</button>
+        <button class="btn secondary copyb" onclick="editMsg(event, '${msg.id}')" title="Load into the inject panel to edit before sending">Edit &amp; send</button>
+      </div>
       ${sections || '<div class="label" style="font-size:0.78rem;">No data or context on this message.</div>'}
     </div>
   </div>`;
