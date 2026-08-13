@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1a19](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a19) (2026-08-13)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a18...0.1.1a19)
+
+**Merged pull requests:**
+
+- fix: busmon \_capture\_session gates on value; harden restoreFocus selector [\#55](https://github.com/OpenVoiceOS/ovos-busmon/pull/55) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.1.1a18](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a18) (2026-08-13)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a17...0.1.1a18)
