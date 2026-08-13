@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1a9](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a9) (2026-08-13)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a8...0.1.1a9)
+
+**Merged pull requests:**
+
+- perf: batch live renders into one per animation frame [\#35](https://github.com/OpenVoiceOS/ovos-busmon/pull/35) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.1.1a8](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a8) (2026-08-13)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a7...0.1.1a8)
