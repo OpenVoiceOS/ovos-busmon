@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1a14](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a14) (2026-08-13)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a13...0.1.1a14)
+
+**Merged pull requests:**
+
+- fix: busmon UX/a11y round 2 \(mobile, error states, keyboard filters, chat feedback\) [\#45](https://github.com/OpenVoiceOS/ovos-busmon/pull/45) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.1.1a13](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a13) (2026-08-13)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a12...0.1.1a13)
