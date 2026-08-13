@@ -26,7 +26,8 @@ Browser note: Chromium browsers allow a `ws://localhost` connection from an
 `https://` page, because localhost is a trustworthy origin. Safari and some
 Firefox versions block it. If the connection is refused, click **Save offline
 copy** in the UI and open the saved file locally. It has the same functions and
-no restrictions.
+no restrictions. For this and other connection problems, see
+[docs/troubleshooting.md](docs/troubleshooting.md).
 
 ## Two transport modes, one UI
 
@@ -118,23 +119,19 @@ The service binds only to `127.0.0.1` by default. Do not expose it to untrusted 
 
 ## Features
 
-- Live "now" line: the assistant state (Heard, Thinking, Speaking, or Didn't understand), inferred from the latest traffic
-- Dense, one-row-per-message log with a per-category color on the left edge (errors in red)
-- Firehose control: high-frequency plumbing (sensor polling, sync heartbeats, enclosure animation, mic and IPC chatter) is muted by default; click **Show noise** to reveal it
-- Consecutive rows of the same message type coalesce into one row with a ×N count
-- Category chips (all, heard, intents, skills, speech, errors) with live counts, plus click-to-filter on every type, session, source, and destination shown in a row
-- Click a row to expand its JSON inline, with **Copy JSON**. The log freezes while a row is open and resumes on collapse
-- Filter bar: type glob, full-text search, session, source, destination, and a newest/oldest order select, with removable active-filter tags and a **Clear** button
-- Group by session: group the stream into expandable per-interaction traces
-- Chat panel: chat with the assistant in text over one stable session id (multi-turn and converse work) while you watch the bus handle each turn
-- Pause and resume capture, plus auto-pause on filter match
-- Bounded client-side buffer (configurable, with a visible dropped-count)
-- A **Tools** menu for Export JSONL, Export JSON, Save offline copy, Clear buffer, pause-on-match, and buffer size
-- Message injection (type, JSON `data`, and optional JSON `context`), with presets, and **Resend** / **Edit & send** on any captured row
-- Session editor: build the OVOS Session (`session_id`, `lang`, `site_id`, `system_unit`, `pipeline`) that travels in `context["session"]`, and attach it to injects and chat
-- Session-aware chat with a per-turn bus trace
-- Ring buffer with configurable capacity and `since_id` pagination
+- **Stream & filter**: a live "now" line, a dense DevTools-style log with
+  coalesced bursts and a mutable noise firehose, category chips and
+  click-to-filter, and a bounded, configurable buffer with a dropped-count
+- **Trace a session**: group the flat stream into expandable per-interaction
+  traces, from utterance to skill to speech
+- **Debug tools**: inject a message onto the bus with presets, resend or edit
+  a captured row, build a Session (including `pipeline`) to attach to
+  injects and chat, and chat with the assistant over a stable session id
+- **Export**: JSONL, JSON, or a full offline copy of the monitor with its
+  captured messages
 - GitHub Pages deployable (Mode 1, no server needed)
+
+For the full detail on each control, see the [docs](docs/index.md).
 
 ## Development
 
@@ -158,6 +155,11 @@ The `?token=` form lets the live UI carry the token on its SSE stream, which
 HTTP Basic cannot. HTTP Basic auth sends credentials in plaintext unless you add
 TLS. Keep the default `127.0.0.1` bind for local use, and do not expose the
 service to the public internet.
+
+A token in the URL can end up in the browser's history, in server access
+logs, and in any proxy log between the browser and the service. Use a
+trusted network, and prefer a short-lived token when you must expose the
+service beyond loopback.
 
 ## Related projects
 
