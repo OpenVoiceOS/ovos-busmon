@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1a12](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a12) (2026-08-13)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a11...0.1.1a12)
+
+**Merged pull requests:**
+
+- fix: correct busmon UI defects \(memo leak, aria sync, SSE auth, CSS cleanup\) [\#41](https://github.com/OpenVoiceOS/ovos-busmon/pull/41) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.1.1a11](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a11) (2026-08-13)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a10...0.1.1a11)
