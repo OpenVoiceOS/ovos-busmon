@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1a16](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a16) (2026-08-13)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a15...0.1.1a16)
+
+**Merged pull requests:**
+
+- fix: busmon round 3 \(coalesce hides distinct msgs, backfill cap, chat/SSE\) [\#49](https://github.com/OpenVoiceOS/ovos-busmon/pull/49) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.1.1a15](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a15) (2026-08-13)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a14...0.1.1a15)
