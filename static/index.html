@@ -401,6 +401,11 @@
     .lsess, .lroute { color: var(--muted); cursor: pointer; flex: 0 0 auto; font-size: 0.76rem; }
     .lsess:hover, .lroute:hover { color: var(--accent); text-decoration: underline; }
     .lrow.error .lty { color: var(--bad); }
+    /* On touch/coarse pointers, give the click-to-filter fields a 24px hit
+       target (WCAG 2.5.8) so tapping a session/source to trace it is reliable. */
+    @media (pointer: coarse) {
+      .lty, .lsess, .lroute { min-height: 24px; display: inline-flex; align-items: center; }
+    }
     .lrow.error { background: color-mix(in srgb, var(--bad) 5%, transparent); }
     .lbody { padding: 8px 12px 12px 16px; background: var(--card-soft); border-top: 1px solid var(--line); }
     .lbody-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
@@ -1129,10 +1134,23 @@ function globMatch(text, pattern) {
   return re.test(text);
 }
 
+const _searchCache = new WeakMap();
+// Search only the meaningful fields, not the synthetic id/timestamp the capture
+// adds — searching "42" or "2026" should not match an internal id or a date
+// stamp the bus frame never carried. Cached per message (derived from immutable
+// fields) so typing does not re-stringify the whole buffer on every keystroke.
+function searchBlob(msg) {
+  if (msg && typeof msg === 'object' && _searchCache.has(msg)) return _searchCache.get(msg);
+  const b = JSON.stringify({
+    type: msg && msg.type, data: msg && msg.data, context: msg && msg.context,
+    session: msg && msg.session, source: msg && msg.source, destination: msg && msg.destination,
+  }).toLowerCase();
+  if (msg && typeof msg === 'object') _searchCache.set(msg, b);
+  return b;
+}
 function matchesSearch(msg, text) {
   if (!text) return true;
-  text = text.toLowerCase();
-  return JSON.stringify(msg).toLowerCase().includes(text);
+  return searchBlob(msg).includes(text.toLowerCase());
 }
 
 function filteredMessages() {
@@ -1929,8 +1947,15 @@ document.getElementById('chat-log').addEventListener('click', e => {
   document.getElementById('sess-advanced').addEventListener(ev, validateSessionAdvanced));
 
 // ─── Filter listeners ─────────────────────────────────────────────────────────
-['filter','search','session_filter','source_filter','dest_filter','sort']
-  .forEach(id => document.getElementById(id).addEventListener('input', render));
+// Debounce the text filters: each keystroke otherwise rescans and rebuilds the
+// whole buffer, which janks on a large log. The sort <select> stays immediate.
+function _debounce(fn, ms) {
+  let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); };
+}
+const _debouncedRender = _debounce(render, 120);
+['filter','search','session_filter','source_filter','dest_filter']
+  .forEach(id => document.getElementById(id).addEventListener('input', _debouncedRender));
+document.getElementById('sort').addEventListener('input', render);
 
 // Delegated log interaction: click any field value to filter by it (type →
 // watch that topic, session → inspect it, source/destination → route), and
