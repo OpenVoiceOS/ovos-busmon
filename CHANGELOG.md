@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1a10](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a10) (2026-08-13)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a9...0.1.1a10)
+
+**Merged pull requests:**
+
+- a11y: keyboard-operable log rows + status live region [\#37](https://github.com/OpenVoiceOS/ovos-busmon/pull/37) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.1.1a9](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a9) (2026-08-13)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a8...0.1.1a9)
