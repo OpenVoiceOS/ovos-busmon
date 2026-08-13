@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1a7](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a7) (2026-08-13)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a6...0.1.1a7)
+
+**Merged pull requests:**
+
+- fix: audit-loop wave 4 \(inject/chat hang + thread leak on a dead bus\) [\#31](https://github.com/OpenVoiceOS/ovos-busmon/pull/31) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.1.1a6](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a6) (2026-08-13)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a5...0.1.1a6)
