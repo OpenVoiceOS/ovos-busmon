@@ -187,6 +187,25 @@ async def test_send_503_when_bus_not_connected(client):
 
 
 @pytest.mark.asyncio
+async def test_async_client_bus_treated_as_connected(client):
+    """A bus exposing no connection indicator (the AsyncMessageBusClient shape:
+    connect/close/on/remove/emit only) must be treated as connected so inject
+    and chat work — not permanently 503'd once PR #200 ships."""
+    import ovos_busmon.service as svc
+
+    class _AsyncShape:
+        async def connect(self):
+            pass
+
+        async def emit(self, m):
+            pass
+
+    with patch.object(svc, "_capture_bus", _AsyncShape()):
+        r = await client.post("/api/send", json={"type": "speak", "data": {}})
+    assert r.status_code == 202
+
+
+@pytest.mark.asyncio
 async def test_auth_off_by_default():
     """With no token or username/password configured, the API is open (the
     loopback dev default). There are NO default credentials anymore."""

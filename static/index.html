@@ -1512,7 +1512,18 @@ function exportJSONL() {
   download(lines, 'bus_messages.jsonl', 'application/x-ndjson');
 }
 
-function exportJSON() {
+async function exportJSON() {
+  // In service mode, export the full server capture buffer (same corpus as
+  // Export JSONL) rather than only the client-side backfill + live tail.
+  if (transportMode === 'sse') {
+    try {
+      const r = await authFetch('api/messages?since_id=0');
+      if (r.ok) {
+        download(JSON.stringify(await r.json(), null, 2), 'bus_messages.json', 'application/json');
+        return;
+      }
+    } catch (e) { /* fall through to the client-side buffer */ }
+  }
   download(JSON.stringify(messages, null, 2), 'bus_messages.json', 'application/json');
 }
 
