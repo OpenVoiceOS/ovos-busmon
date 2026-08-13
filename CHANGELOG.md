@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1a3](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a3) (2026-08-13)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a2...0.1.1a3)
+
+**Merged pull requests:**
+
+- feat: redesign the monitor as a DevTools-style dense log [\#23](https://github.com/OpenVoiceOS/ovos-busmon/pull/23) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.1.1a2](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a2) (2026-08-12)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a1...0.1.1a2)
