@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1a18](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a18) (2026-08-13)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a17...0.1.1a18)
+
+**Merged pull requests:**
+
+- fix: busmon keyboard focus survives log rebuild; Escape closes panels [\#53](https://github.com/OpenVoiceOS/ovos-busmon/pull/53) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.1.1a17](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a17) (2026-08-13)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a16...0.1.1a17)
