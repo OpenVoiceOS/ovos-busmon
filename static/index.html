@@ -102,6 +102,7 @@
     .transport-badge.ws  { background: color-mix(in srgb, var(--ok) 16%, transparent);  color: var(--ok);  border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
     .transport-badge.sse { background: var(--accent-wash); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
     .transport-badge.err { background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+    .transport-badge.offline { background: color-mix(in srgb, var(--fg) 10%, transparent); color: var(--fg-muted, var(--fg)); border-color: color-mix(in srgb, var(--fg) 30%, transparent); }
 
     /* ─── the signature waveform: sound made visible ─────────────────────────
      * On this bus MONITOR it means live traffic: the bars animate while
@@ -1661,13 +1662,27 @@ function download(content, filename, mime) {
 // mixed-content restrictions (Safari/older Firefox block ws://localhost
 // from https origins; a local file has no such limit).
 async function downloadStandalone() {
+  let html;
   try {
     const r = await fetch(window.location.pathname);
-    const html = await r.text();
-    download(html, 'ovos-busmon.html', 'text/html');
+    html = await r.text();
   } catch (e) {
-    download(document.documentElement.outerHTML, 'ovos-busmon.html', 'text/html');
+    html = '<!doctype html>\n' + document.documentElement.outerHTML;
   }
+  // Embed the captured messages so the saved copy REPLAYS them offline. Without
+  // this the page just boots and reconnects to a bus, clobbering the capture —
+  // the recipient would see nothing (or an unrelated live session). The boot
+  // code hydrates from this element and skips the live connection.
+  const payload = JSON.stringify({ messages: messages, droppedCount: droppedCount })
+    .replace(/<\/script/gi, '<\\/script');
+  const tag = '\n<scr' + 'ipt id="busmon-offline" type="application/json">' + payload + '<\/scr' + 'ipt>\n';
+  // Insert into <head>, before the app <script> runs, so the boot code can read
+  // the embedded data on load. (Placing it before </body> would put it AFTER the
+  // script, so the boot's getElementById would miss it and connect to a bus.)
+  const headClose = '</he' + 'ad>';
+  const idx = html.indexOf(headClose);
+  html = idx >= 0 ? html.slice(0, idx) + tag + html.slice(idx) : html + tag;
+  download(html, 'ovos-busmon.html', 'text/html');
 }
 
 // ─── Chat panel ───────────────────────────────────────────────────────────────
@@ -1917,12 +1932,29 @@ document.querySelectorAll('#quick-chips .chip').forEach(ch =>
   ch.setAttribute('aria-pressed', ch.classList.contains('active') ? 'true' : 'false'));
 render();  // paint the first-run guidance before any traffic arrives
 updateChatAvailability();
-detectTransport().then((mode) => {
-  transportMode = mode;
+const _offlineData = document.getElementById('busmon-offline');
+if (_offlineData) {
+  // A saved offline copy: replay the embedded capture and do NOT connect to any
+  // bus, so the recipient sees exactly what was captured, not a live session.
+  try {
+    const d = JSON.parse(_offlineData.textContent);
+    messages = Array.isArray(d.messages) ? d.messages : [];
+    droppedCount = d.droppedCount || 0;
+    nextId = messages.reduce((mx, x) => Math.max(mx, x.id || 0), 0);
+  } catch (e) { messages = []; }
+  transportMode = 'offline';
+  setBadge('offline', `Offline snapshot · ${messages.length} messages`);
+  setWaveDown();
   updateChatAvailability();
-  if (mode === 'sse') startSSE();
-  else startDirectWS();
-});
+  render();
+} else {
+  detectTransport().then((mode) => {
+    transportMode = mode;
+    updateChatAvailability();
+    if (mode === 'sse') startSSE();
+    else startDirectWS();
+  });
+}
 </script>
 </body>
 </html>
