@@ -318,6 +318,39 @@ async def test_chat_honors_client_declared_session(client):
 
 
 @pytest.mark.asyncio
+async def test_chat_empty_session_uses_default_build(client):
+    """An explicit empty session {} is treated as 'not declared': the server
+    builds its default Session with the pipeline suppressed (SESSION-1), not the
+    verbatim-honor path."""
+    from ovos_busmon import service as svc
+
+    captured = {}
+
+    class _RecordingBus:
+        def __init__(self, **kw):
+            pass
+
+        async def connect(self):
+            pass
+
+        async def close(self):
+            pass
+
+        async def emit(self, msg):
+            captured["context"] = msg.context
+
+    with patch.object(svc, "_make_bus", lambda h, p: _RecordingBus()):
+        r = await client.post(
+            "/api/chat",
+            json={"utterance": "hi", "session_id": "s1", "session": {}},
+        )
+    assert r.status_code == 202
+    sess = captured["context"]["session"]
+    assert sess["session_id"] == "s1"
+    assert sess.get("pipeline", []) == []
+
+
+@pytest.mark.asyncio
 async def test_chat_speak_reply_reaches_stream_for_matching_session():
     """A mocked ``speak`` reply carrying the same session_id used by
     /api/chat must reach the SSE stream (what the chat panel filters on

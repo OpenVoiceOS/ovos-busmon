@@ -866,20 +866,22 @@ function connectWS() {
 function reconnectWS() { connectWS(); }
 
 function normaliseBusFrame(raw) {
-  // Raw bus frame: {type, data, context}
+  // Raw bus frame: {type, data, context}. In direct-WS mode the serialized
+  // Session rides in context.session — surface it so the Session panel and
+  // "Load session" work here too, not only in service mode.
   const ctx = raw.context || {};
+  const sess = (ctx.session && typeof ctx.session === 'object') ? ctx.session : {};
   return {
     id: ++nextId,
     timestamp: ctx.timestamp || new Date().toISOString(),
     type: raw.type || raw.msg_type || '?',
     data: raw.data || {},
     context: ctx,
-    session: ctx.session_id || null,
+    session: ctx.session_id || sess.session_id || null,
     source: ctx.source || null,
-    destination: Array.isArray(ctx.destination)
-      ? ctx.destination.join(',')
-      : (ctx.destination || null),
-    session_data: {},
+    // Keep the raw destination (array or string) so Resend reproduces it faithfully.
+    destination: ctx.destination || null,
+    session_data: sess,
   };
 }
 
@@ -1553,6 +1555,7 @@ async function sendChat() {
     if (Object.keys(s).length) { session = s; if (s.session_id) sid = s.session_id; if (s.lang) lang = s.lang; }
   } catch (e) { appendChatBubble('error', e.message); return; }
   chatSessionIds.add(sid);
+  if (chatSessionIds.size > 50) chatSessionIds.delete(chatSessionIds.values().next().value);
   document.getElementById('chat-session-id-label').textContent = sid;
 
   appendChatBubble('me', text);

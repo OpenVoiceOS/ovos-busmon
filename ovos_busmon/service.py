@@ -328,9 +328,11 @@ async def api_chat(req: ChatRequest, _: str = Depends(_verify)):
         from ovos_bus_client import Message
         from ovos_bus_client.session import Session
 
-        if req.session is not None:
-            # Honor the client-declared Session verbatim. Backfill session_id and
-            # lang so the pipeline and reply correlation still work.
+        if req.session:
+            # A non-empty client-declared Session (busmon Session editor) is
+            # honored verbatim; an empty {} is treated as "not declared" and
+            # falls through to the default build (which suppresses pipeline).
+            # Backfill session_id and lang so pipeline and reply correlation work.
             sess_dict = dict(req.session)
             sess_dict.setdefault("session_id", req.session_id)
             sess_dict.setdefault("lang", req.lang)
