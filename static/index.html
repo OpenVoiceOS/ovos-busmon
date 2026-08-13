@@ -421,6 +421,7 @@
     .lrow.cat-other     { border-left-color: var(--line); }
     .lhead { display: flex; align-items: center; gap: 0.55rem; padding: 3px 10px; font-family: var(--mono); font-size: 0.82rem; line-height: 1.5; cursor: pointer; white-space: nowrap; }
     .lhead:hover { background: var(--card-soft); }
+    .lhead:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
     .lrow.open > .lhead { background: var(--card-soft); }
     .lt { color: var(--muted); flex: 0 0 auto; font-size: 0.76rem; }
     .lty { color: var(--accent); font-weight: 600; cursor: pointer; flex: 0 0 auto; }
@@ -595,7 +596,7 @@
 
 <div class="layout">
   <div class="container">
-    <div class="status-bar" id="status-bar">Waiting for the bus…</div>
+    <div class="status-bar" id="status-bar" role="status" aria-live="polite">Waiting for the bus…</div>
     <div id="log" class="logtbl"></div>
   </div>
 
@@ -1143,6 +1144,8 @@ function toggleRow(row) {
   const open = b.style.display === 'block';
   b.style.display = open ? 'none' : 'block';
   row.classList.toggle('open', !open);
+  const head = row.querySelector('.lhead');
+  if (head) head.setAttribute('aria-expanded', open ? 'false' : 'true');
   // Closing the last open row resumes the live view (flushes queued traffic).
   if (open && !document.querySelector('#log .lrow.open')) render();
 }
@@ -1296,7 +1299,7 @@ function rowHtml(item) {
   if (Object.keys(msg.context || {}).length) sections += msgSection(`ctx-${msg.id}`, 'message.context', msg.context);
   if (Object.keys(msg.session_data || {}).length) sections += msgSection(`sess-${msg.id}`, 'session', msg.session_data);
   return `<div class="lrow cat-${cat}${cat === 'error' ? ' error' : ''}" data-mid="${msg.id}">
-    <div class="lhead">
+    <div class="lhead" tabindex="0" role="button" aria-expanded="false" title="${cat} — Enter to expand">
       <span class="lt">${esc(ts)}</span>
       <span class="lty" data-pick="filter" data-val="${escA(msg.type)}" title="filter by this type">${esc(msg.type)}</span>
       ${item.count > 1 ? `<span class="lx" title="${item.count} in a row">×${item.count}</span>` : ''}
@@ -1715,6 +1718,12 @@ document.getElementById('log').addEventListener('click', e => {
   if (pk) { pick(pk.dataset.pick, pk.dataset.val); return; }
   const head = e.target.closest('.lhead');
   if (head) toggleRow(head.parentElement);
+});
+// Keyboard: a focused row header (role=button, tabindex=0) expands on Enter/Space.
+document.getElementById('log').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const head = e.target.closest('.lhead');
+  if (head) { e.preventDefault(); toggleRow(head.parentElement); }
 });
 // Removable active-filter tags.
 document.getElementById('active-filters').addEventListener('click', e => {
