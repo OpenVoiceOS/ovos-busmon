@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1a5](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a5) (2026-08-13)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a4...0.1.1a5)
+
+**Merged pull requests:**
+
+- fix: audit-loop wave 2 \(WS reconnect identity guard, evicted-message feedback\) [\#27](https://github.com/OpenVoiceOS/ovos-busmon/pull/27) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.1.1a4](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a4) (2026-08-13)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a3...0.1.1a4)
