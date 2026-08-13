@@ -9,9 +9,11 @@ step-by-step walkthrough, see the [tutorials](tutorials.md).
 ## The now line
 
 A single line at the top says what the assistant is doing right now. It reads
-the latest meaningful traffic and shows one state: *Heard*, *Thinking*,
-*Speaking*, or *Didn't understand*. Use it to see the assistant's state at a
-glance without reading the stream.
+the latest meaningful traffic and shows one of six states: *Live* (idle,
+waiting for traffic), *Heard* (an utterance came in), *Thinking* (the pipeline
+is matching an intent), *Working* (a skill handler is running), *Speaking*
+(output goes out), or *Didn't understand* (an error). Use it to see the
+assistant's state at a glance without reading the stream.
 
 ## The live log
 
@@ -150,9 +152,12 @@ also accepts an optional `session` object, which it honors as declared.
 ## Injecting messages
 
 The **Inject** panel sends an arbitrary message onto the bus: a type, a `data`
-JSON, and an optional `context` JSON. The service validates the message, emits
-it through the bus client, and the message comes back in the stream through the
-monitor's own listener. This gives you a full bus REPL for reproducing bugs.
+JSON, and an optional `context` JSON. Inject works in both transport modes. In
+service mode, it posts to the `/api/send` endpoint, which validates the
+message and emits it through the bus client. In direct WebSocket mode, it
+sends the message straight over the WebSocket. Either way, the message comes
+back in the stream through the monitor's own listener. This gives you a full
+bus REPL for reproducing bugs.
 
 A **Preset** dropdown fills a common message type, such as `speak` or
 `recognizer_loop:utterance`, with a skeleton payload. You then edit and send.
