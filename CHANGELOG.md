@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1a11](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a11) (2026-08-13)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a10...0.1.1a11)
+
+**Merged pull requests:**
+
+- perf: memoize message category + noise flag [\#39](https://github.com/OpenVoiceOS/ovos-busmon/pull/39) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.1.1a10](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a10) (2026-08-13)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a9...0.1.1a10)
