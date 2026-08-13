@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1a4](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a4) (2026-08-13)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a3...0.1.1a4)
+
+**Merged pull requests:**
+
+- fix: audit-loop wave 1 \(coalesce id stability, trace window, destination guard\) [\#25](https://github.com/OpenVoiceOS/ovos-busmon/pull/25) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.1.1a3](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a3) (2026-08-13)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a2...0.1.1a3)
