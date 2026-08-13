@@ -146,7 +146,12 @@ def _bus_is_connected(bus) -> bool:
         return bool(c)
     inner = getattr(bus, "_bus", None)
     ev = getattr(inner, "connected_event", None)
-    return bool(ev is not None and ev.is_set())
+    if ev is not None:
+        return bool(ev.is_set())
+    # A client that exposes no connection indicator (e.g. AsyncMessageBusClient
+    # from ovos-bus-client PR #200) — assume connected and let the bounded emit
+    # in _emit_to_bus surface a real failure, rather than 503-ing every request.
+    return True
 
 
 async def _emit_to_bus(message) -> None:
