@@ -136,6 +136,9 @@ _subscribers: set[asyncio.Queue] = set()
 # not stop it), which hung the request and leaked a thread on every failed
 # send. Reusing the persistent bus fails fast to 503 when it is not connected.
 _capture_bus = None
+# ISO timestamp of the most recent message seen on the capture bus, so operators
+# can tell "bus connected but idle" from "bus never delivered anything".
+_last_bus_event_at = None
 
 
 def _bus_is_connected(bus) -> bool:
@@ -245,6 +248,8 @@ async def lifespan(app: FastAPI):
             ),
         )
         _buffer.append(payload)
+        global _last_bus_event_at
+        _last_bus_event_at = payload.timestamp
         asyncio.create_task(_broadcast_to_sse(payload.to_dict()))
 
     bus.on("message", _on_raw)
@@ -327,6 +332,8 @@ async def api_status(_: str = Depends(_verify)):
         "buffer_capacity": _buffer.maxlen,
         "bus_host": OVOS_BUS_HOST,
         "bus_port": OVOS_BUS_PORT,
+        "bus_connected": _bus_is_connected(_capture_bus),
+        "last_bus_event_at": _last_bus_event_at,
     }
 
 

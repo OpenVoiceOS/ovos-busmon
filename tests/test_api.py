@@ -94,6 +94,35 @@ async def test_status(client):
 
 
 @pytest.mark.asyncio
+async def test_status_bus_connected_flag(client):
+    """/api/status exposes bus_connected so the UI can tell 'bus down' from
+    'idle' — True for a connected capture bus, False for a disconnected one."""
+    import ovos_busmon.service as svc
+
+    class _Up:
+        connected = True
+
+    with patch.object(svc, "_capture_bus", _Up()):
+        r = await client.get("/api/status")
+    assert r.status_code == 200
+    data = r.json()
+    assert "bus_connected" in data
+    assert data["bus_connected"] is True
+    assert "last_bus_event_at" in data
+
+    class _Down:
+        connected = False
+
+    with patch.object(svc, "_capture_bus", _Down()):
+        r = await client.get("/api/status")
+    assert r.json()["bus_connected"] is False
+
+    with patch.object(svc, "_capture_bus", None):
+        r = await client.get("/api/status")
+    assert r.json()["bus_connected"] is False
+
+
+@pytest.mark.asyncio
 async def test_messages_empty(client):
     r = await client.get("/api/messages")
     assert r.status_code == 200
