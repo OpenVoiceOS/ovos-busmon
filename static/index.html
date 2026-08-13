@@ -445,7 +445,7 @@
 <div class="now" id="now" role="status" aria-live="polite">
   <span class="now-dot" id="now-dot"></span>
   <span class="now-label" id="now-label">Waiting for the bus…</span>
-  <span class="now-detail" id="now-detail"></span>
+  <span class="now-detail" id="now-detail" aria-hidden="true"></span>
 </div>
 
 <!-- Connection Config (Mode 1 only — hidden when served by FastAPI) -->
@@ -774,6 +774,7 @@ async function detectTransport() {
   try {
     const r = await authFetch('api/status', {signal: AbortSignal.timeout(1500)});
     if (r.ok) return 'sse';
+    if (r.status === 401) return 'auth';
   } catch (e) { /* no service behind this origin */ }
   return 'ws';
 }
@@ -1556,7 +1557,6 @@ function esc(s) {
 function pushMessage(msg) {
   pulseWave();
   handleChatReply(msg);
-  if (paused) return;
   if (!msg.id) msg.id = ++nextId;
   messages.push(msg);
   const cap = maxBuffer();
@@ -1566,9 +1566,11 @@ function pushMessage(msg) {
     droppedCount += excess;
   }
 
-  if (document.getElementById('pause-on-match').checked && matchesCurrentFilters(msg)) {
+  if (!paused && document.getElementById('pause-on-match').checked && matchesCurrentFilters(msg)) {
     setPaused(true);
   }
+
+  if (paused) return;  // still buffered above; just skip the render while paused
 
   scheduleRender();  // batch a burst into one render (won't disturb an open row)
 }
@@ -1779,9 +1781,9 @@ async function sendChat() {
 
   // A prior turn on this same session that never got a reply is superseded
   // now — resolve it before starting the new placeholder.
-  resolvePendingChat(sid, 'error', 'no response received');
+  resolvePendingChat(sid, 'error', 'no spoken reply received (the turn may have used a screen or media)');
   const pendingBubble = appendChatBubble('assistant', 'assistant is responding…');
-  const timer = setTimeout(() => resolvePendingChat(sid, 'error', 'no response received'), CHAT_REPLY_TIMEOUT_MS);
+  const timer = setTimeout(() => resolvePendingChat(sid, 'error', 'no spoken reply received (the turn may have used a screen or media)'), CHAT_REPLY_TIMEOUT_MS);
   pendingChatReplies.set(sid, {bubble: pendingBubble, timer});
   try {
     const resp = await authFetch('api/chat', {
@@ -1843,6 +1845,13 @@ function handleChatReply(msg) {
   } else if (t === 'complete_intent_failure') {
     const text = 'No response (complete_intent_failure)';
     if (!resolvePendingChat(msg.session, 'error', text)) appendChatBubble('error', text);
+  } else if (t === 'mycroft.skill.handler.complete') {
+    // GUI/media/other non-speak skills end the turn here with no spoken
+    // reply — resolve any still-pending bubble instead of letting it time
+    // out and falsely report "no response received". resolvePendingChat
+    // no-ops if a real speak already resolved this session, so it is safe
+    // to call unconditionally and skip appendChatBubble on a miss.
+    resolvePendingChat(msg.session, 'assistant', '(handled — no spoken reply)');
   }
   // Refresh any open turn-traces for this session so events stream in live.
   document.querySelectorAll('.chat-trace-btn.open').forEach(btn => {
@@ -1952,7 +1961,12 @@ if (_offlineData) {
     transportMode = mode;
     updateChatAvailability();
     if (mode === 'sse') startSSE();
-    else startDirectWS();
+    else if (mode === 'auth') {
+      transportError = 'auth';
+      setBadge('err', 'Auth failed — check token');
+      setWaveDown();
+      render();
+    } else startDirectWS();
   });
 }
 </script>
