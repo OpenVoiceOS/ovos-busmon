@@ -341,6 +341,7 @@
     .inline-label { color: var(--muted); font-size: 0.85rem; align-self: center; }
     .inject-status.ok  { color: var(--ok); }
     .inject-status.err { color: var(--bad); }
+    .bus-banner { background: color-mix(in srgb, var(--bad) 14%, var(--card)); border: 1px solid var(--bad); color: var(--bad); border-radius: var(--radius); padding: 0.7rem 1rem; margin-bottom: 0.8rem; text-align: left; font-size: 0.9rem; font-weight: 600; }
     .session-panel { background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--accent-strong); border-radius: var(--radius); padding: 0.8rem 1rem; margin-bottom: 0.8rem; text-align: left; box-shadow: var(--shadow); }
     .session-panel > summary { cursor: pointer; color: var(--ink); font-weight: 600; font-size: 0.9rem; }
     .session-panel textarea { background: var(--card-soft); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px; font-family: var(--mono); font-size: 0.85rem; width: 100%; min-height: 70px; resize: vertical; margin-top: 0.4rem; }
@@ -459,6 +460,9 @@
   </div>
 </details>
 
+<main>
+<!-- Bus-down banner: assistant messagebus unreachable from the service (SSE mode). -->
+<div class="bus-banner" id="bus-banner" role="alert" style="display:none"></div>
 <div class="toolbar">
   <div class="tbar">
     <div class="chips" id="quick-chips">
@@ -473,7 +477,7 @@
     <span class="tspacer"></span>
     <button class="btn secondary sm" id="pause-btn" onclick="togglePause()">⏸ Pause</button>
     <button class="btn secondary sm" id="view-btn" onclick="toggleView()" title="Group messages by session for tracing one interaction">🗂 Group by session</button>
-    <button class="btn secondary sm" id="chat-btn" onclick="toggleChat()">💬 Chat</button>
+    <button class="btn secondary sm" id="chat-btn" onclick="toggleChat()" aria-controls="chat-panel">💬 Chat</button>
     <details class="tools">
       <summary class="btn secondary sm">⋯ Tools ▾</summary>
       <div class="tools-menu">
@@ -492,7 +496,7 @@
     <input type="text" id="session_filter" class="input sm" aria-label="Filter by session" placeholder="session">
     <input type="text" id="source_filter"  class="input sm" aria-label="Filter by source" placeholder="source">
     <input type="text" id="dest_filter"    class="input sm" aria-label="Filter by destination" placeholder="destination">
-    <select id="sort" class="input sm"><option value="desc">newest</option><option value="asc">oldest</option></select>
+    <select id="sort" class="input sm" aria-label="Sort order"><option value="desc">newest</option><option value="asc">oldest</option></select>
     <button class="btn secondary sm" onclick="clearFilters()">Clear</button>
   </div>
   <div class="active-filters" id="active-filters" style="display:none"></div>
@@ -505,7 +509,7 @@
     <a href="https://openvoiceos.github.io/ovos-technical-manual/" target="_blank" rel="noopener">Technical manual</a>.
     For a normal conversation instead of one raw message, use <a href="#" onclick="toggleChat();return false;">Chat →</a></p>
   <div class="row" style="margin-top:0.5rem;">
-    <select id="inject-preset" class="input sm" style="flex:0 1 190px;" onchange="applyPreset(this.value); this.value='';" title="Fill a common message type">
+    <select id="inject-preset" class="input sm" style="flex:0 1 190px;" onchange="applyPreset(this.value); this.value='';" aria-label="Inject message preset" title="Fill a common message type">
       <option value="">Preset…</option>
       <option value="speak">speak</option>
       <option value="recognizer_loop:utterance">recognizer_loop:utterance</option>
@@ -538,7 +542,7 @@
   <div class="row" style="margin-top:0.5rem;">
     <label class="field" style="flex:1 1 150px;"><span>session_id</span><input type="text" id="sess-id" class="input sm"></label>
     <label class="field" style="flex:1 1 120px;"><span>lang</span>
-      <select id="sess-lang" class="input sm">
+      <select id="sess-lang" class="input sm" aria-label="Session language">
         <option value="">(default)</option>
         <option>en-US</option><option>en-GB</option><option>pt-PT</option><option>pt-BR</option>
         <option>es-ES</option><option>de-DE</option><option>fr-FR</option><option>it-IT</option>
@@ -547,7 +551,7 @@
     </label>
     <label class="field" style="flex:1 1 130px;"><span>site_id</span><input type="text" id="sess-site" class="input sm" placeholder="e.g. kitchen"></label>
     <label class="field" style="flex:1 1 120px;"><span>system_unit</span>
-      <select id="sess-unit" class="input sm"><option value="">(default)</option><option>metric</option><option>imperial</option></select>
+      <select id="sess-unit" class="input sm" aria-label="Session system unit"><option value="">(default)</option><option>metric</option><option>imperial</option></select>
     </label>
   </div>
   <div class="row" style="margin-top:0.5rem;">
@@ -566,12 +570,12 @@
 <div class="layout">
   <div class="container">
     <div class="status-bar" id="status-bar" role="status" aria-live="off">Waiting for the bus…</div>
-    <div id="log" class="logtbl"></div>
+    <div id="log" class="logtbl" role="log" aria-label="Message stream"></div>
   </div>
 
   <!-- Chat panel: converse with the assistant over one stable Session. -->
-  <div class="chat-panel" id="chat-panel">
-    <h2>💬 Chat</h2>
+  <div class="chat-panel" id="chat-panel" role="region" aria-labelledby="chat-panel-title">
+    <h2 id="chat-panel-title">💬 Chat</h2>
     <div class="chat-hint">Requires service mode (SSE). Chats under the <b>Session</b> above when it is filled; expand <b>trace</b> under a turn to see the bus events it produced.</div>
     <div class="chat-log" id="chat-log"></div>
     <div class="chat-input-row">
@@ -582,6 +586,7 @@
     <div class="chat-session-id">session: <span id="chat-session-id-label"></span></div>
   </div>
 </div>
+</main>
 
 <footer>
   <div class="about">
@@ -792,9 +797,40 @@ let _sseLastId = 0;
 let _sseSource = null;
 let _sseGen = 0;
 
+// ── Assistant-bus reachability banner (service mode only) ────────────────────
+// DISTINCT from the transport badge: the badge reflects browser↔service (SSE),
+// this banner reflects service↔assistant messagebus (from /api/status).
+let _busStatusTimer = null;
+function setBusBanner(connected, host, port) {
+  const el = document.getElementById('bus-banner');
+  if (!el) return;
+  if (connected) {
+    el.style.display = 'none';
+    el.textContent = '';
+  } else {
+    const where = (host != null && port != null) ? ` at ${host}:${port}` : '';
+    el.textContent = `⚠ Assistant bus not reachable${where} — the service is retrying. Injects and chat will fail until it reconnects.`;
+    el.style.display = '';
+  }
+}
+async function pollBusStatus() {
+  try {
+    const r = await authFetch('api/status', {signal: AbortSignal.timeout(1500)});
+    if (!r.ok) return;  // transport problems are the badge's job, not this banner
+    const s = await r.json();
+    if (typeof s.bus_connected === 'boolean') setBusBanner(s.bus_connected, s.bus_host, s.bus_port);
+  } catch (e) { /* leave the banner as-is; the transport badge owns SSE errors */ }
+}
+function startBusStatusPolling() {
+  if (_busStatusTimer) return;
+  pollBusStatus();
+  _busStatusTimer = setInterval(pollBusStatus, 5000);
+}
+
 function startSSE() {
   wsConfigPanel.style.display = 'none';
   setBadge('sse', 'SSE (service)');
+  startBusStatusPolling();
 
   // Backfill from ring buffer — honor the configured client buffer size so a
   // reload restores as much history as the user asked to keep, not a fixed cap.
@@ -904,6 +940,20 @@ function normaliseBusFrame(raw) {
   };
 }
 
+// FastAPI errors arrive as {"detail": "..."} JSON. Surface just the sentence to
+// the user instead of the raw envelope; fall back to the raw text otherwise.
+function prettyApiError(raw) {
+  if (raw == null) return '';
+  try {
+    const j = JSON.parse(raw);
+    const d = j && j.detail;
+    if (typeof d === 'string') return d;
+    if (Array.isArray(d) && d.length && d[0] && d[0].msg) return d.map(e => e.msg).join('; ');
+    if (d != null) return JSON.stringify(d);
+  } catch (e) { /* not JSON — show it verbatim */ }
+  return raw;
+}
+
 // ─── Inject ───────────────────────────────────────────────────────────────────
 // Core emit, shared by the inject panel and by row Resend/Edit-and-send.
 // The service rebroadcasts what it emits, so a sent message reappears in the
@@ -915,7 +965,7 @@ async function sendToBus(type, data, context) {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({type: type, data: data, context: context}),
     });
-    return resp.ok ? {ok: true} : {ok: false, error: await resp.text()};
+    return resp.ok ? {ok: true} : {ok: false, error: prettyApiError(await resp.text())};
   }
   if (!_ws || _ws.readyState !== WebSocket.OPEN) return {ok: false, error: 'WebSocket not connected'};
   _ws.send(JSON.stringify({type: type, data: data, context: context}));
@@ -1337,7 +1387,7 @@ function rowHtml(item) {
   if (Object.keys(msg.context || {}).length) sections += msgSection(`ctx-${msg.id}`, 'message.context', msg.context);
   if (Object.keys(msg.session_data || {}).length) sections += msgSection(`sess-${msg.id}`, 'session', msg.session_data);
   return `<div class="lrow cat-${cat}${cat === 'error' ? ' error' : ''}" data-mid="${msg.id}" data-ids="${item.ids.join(',')}">
-    <div class="lhead" tabindex="0" role="button" aria-expanded="false" title="${cat} — Enter to expand">
+    <div class="lhead" tabindex="0" role="button" aria-expanded="false" aria-label="Expand ${escA(msg.type)}${ts ? ' at ' + escA(ts) : ''}" title="${cat} — Enter to expand">
       <span class="lt">${esc(ts)}</span>
       <span class="lty" data-pick="filter" data-val="${escA(msg.type)}" tabindex="0" role="button" aria-label="filter by type ${escA(msg.type)}" title="filter by this type">${esc(msg.type)}</span>
       ${item.count > 1 ? `<span class="lx" title="${item.count} in a row">×${item.count}</span>` : ''}
@@ -1791,7 +1841,7 @@ async function sendChat() {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({utterance: text, lang: lang, session_id: sid, session: session}),
     });
-    if (!resp.ok) resolvePendingChat(sid, 'error', 'Send failed: ' + await resp.text());
+    if (!resp.ok) resolvePendingChat(sid, 'error', 'Send failed: ' + prettyApiError(await resp.text()));
   } catch (e) {
     resolvePendingChat(sid, 'error', 'Send failed: ' + e.message);
   }
