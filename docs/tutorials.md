@@ -67,7 +67,7 @@ mutes these message types by default, so the signal does not drown.
 Click **Show noise** to reveal them. The button shows a live count. Click it
 again to mute them back.
 
-When several rows in a row share the same message type, the log collapses
+When several rows in a row share the same message type, the log coalesces
 them into one row with a **×N** count next to the type. This keeps a burst of
 identical messages readable as a single line.
 
@@ -132,7 +132,8 @@ To read one interaction as a single trace, group the stream by session:
 3. Click the group to expand its steps.
 
 This view groups the stream by session id. One interaction reads as one trace:
-the utterance, then the pipeline match, then the skill handler, then the speak
+the utterance, then the pipeline match (the pipeline is the ordered list of
+intent-matcher ids the core tries), then the skill handler, then the speak
 output.
 
 Each step carries the same category color as the log. The color marks the

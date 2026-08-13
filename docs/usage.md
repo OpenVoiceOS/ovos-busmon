@@ -79,6 +79,35 @@ catch one specific message live without losing it to scrollback.
 The **Tools** menu also holds **Export JSONL**, **Export JSON**, **Save
 offline copy**, and **Clear buffer**.
 
+#### Two buffers, not one
+
+There are two independent caps on how much traffic the monitor holds.
+
+- **Client buffer.** Set from the **Tools** menu. Default 5000 messages. It
+  caps what the browser renders and exports in direct-WebSocket mode (Mode
+  1).
+- **Server ring buffer.** Set with the `BUFFER_SIZE` environment variable.
+  Default 2000 messages. It backs `/api/messages`, `/api/export`, and
+  `/api/status` in service mode (Mode 2).
+
+The two caps do not share a value. See the [README configuration
+table](../README.md#configuration) for the server-side variable.
+
+### Keyboard shortcuts
+
+The shortcuts work only when focus is on the page, not inside a text field.
+
+| Key | Action |
+|---|---|
+| `/` | Focus the search field |
+| `p` | Pause or resume the log |
+| `g` | Toggle group by session |
+
+### Theme
+
+The **◐** button at `#theme-toggle` switches between light and dark theme.
+The choice persists in the browser's local storage.
+
 ## Group by session
 
 **Group by session** groups the flat stream by session id. When a session id is

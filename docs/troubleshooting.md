@@ -54,6 +54,24 @@ The monitor page reads `?token=` from its own URL one time. It stores the token
 and sends it on every later request. Open the page with `?token=YOUR_TOKEN` once
 to authenticate it.
 
+## The page loads but the stream stays empty, with an SSE error badge
+
+**Symptom.** The page loads in service mode. The stream never starts. The badge
+shows **Auth failed — check token** for a bad or missing token. The badge shows
+**SSE error — reconnecting…** when the bus is down for another reason.
+
+**Cause.** The service requires a token, and the page URL carries no
+`?token=` value, or the wrong one.
+
+**Fix.** Open the page again with the correct token in the URL:
+
+```
+https://your-host:8005/?token=YOUR_TOKEN
+```
+
+See [The API returns 401 Unauthorized](#the-api-returns-401-unauthorized) for
+the other ways to send the token.
+
 ## Nothing streams
 
 **Symptom.** The monitor connects, but no messages appear.
