@@ -700,6 +700,7 @@ const _coalKeyCache = new WeakMap();
 function coalKey(m) {
   if (m && typeof m === 'object' && _coalKeyCache.has(m)) return _coalKeyCache.get(m);
   const k = String((m && m.type) || '') + '\x00' + String((m && m.session) || '')
+    + '\x00' + String((m && m.source) || '') + '\x00' + String((m && m.destination) || '')
     + '\x00' + ((m && m.data !== undefined) ? JSON.stringify(m.data) : '');
   if (m && typeof m === 'object') _coalKeyCache.set(m, k);
   return k;
@@ -795,7 +796,9 @@ function startSSE() {
 
   // Backfill from ring buffer — honor the configured client buffer size so a
   // reload restores as much history as the user asked to keep, not a fixed cap.
-  authFetch('api/messages?since_id=0&limit=' + maxBuffer())
+  // Cap at the server's own /api/messages limit (10000) so a large "Keep N"
+  // does not send an out-of-range request that returns nothing.
+  authFetch('api/messages?since_id=0&limit=' + Math.min(maxBuffer(), 10000))
     .then(r => r.json())
     .then(msgs => {
       msgs.forEach(m => pushMessage(normaliseServiceMsg(m)));

@@ -188,11 +188,31 @@ async def _broadcast_to_sse(payload: dict) -> None:
 
 # ─── Bus connection lifecycle ─────────────────────────────────────────────────
 
+def _capture_session(m):
+    """Return ``(session_id, session_data)`` as the frame actually carried them.
+
+    ``SessionManager.get`` fabricates the global default Session
+    (``session_id="default"`` plus this process's whole pipeline) for a message
+    that carried no ``context["session"]``. Capturing that would misrepresent the
+    bus, and would let Resend re-inject a pipeline the frame never had. So a
+    session-less frame stays session-less; only a frame that declared a session
+    is enriched from ``SessionManager``.
+    """
+    ctx = getattr(m, "context", None) or {}
+    if "session" not in ctx:
+        return None, {}
+    try:
+        from ovos_bus_client.session import SessionManager
+        sess = SessionManager.get(m)
+        return sess.session_id, sess.serialize()
+    except Exception:
+        return None, {}
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _capture_bus
     from ovos_bus_client import Message
-    from ovos_bus_client.session import SessionManager
 
     bus = _make_bus(OVOS_BUS_HOST, OVOS_BUS_PORT)
 
@@ -201,15 +221,8 @@ async def lifespan(app: FastAPI):
             m = Message.deserialize(raw)
         except Exception:
             return
-        try:
-            sess = SessionManager.get(m)
-            sess_id = sess.session_id
-            sess_data = sess.serialize()
-        except Exception:
-            sess_id = None
-            sess_data = {}
-
         ctx = m.context or {}
+        sess_id, sess_data = _capture_session(m)
         standalone = {"session", "source", "destination"}
         payload = CapturedMessage(
             id=_buffer.next_id(),
