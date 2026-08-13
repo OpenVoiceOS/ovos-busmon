@@ -1460,7 +1460,20 @@ function pushMessage(msg) {
     setPaused(true);
   }
 
-  render(true);  // live update: won't disturb a message the reader has open
+  scheduleRender();  // batch a burst into one render (won't disturb an open row)
+}
+
+// Coalesce all messages that arrive within one animation frame into a SINGLE
+// render. Rendering per message re-runs filteredMessages/updateCounts/coalesce
+// over the whole buffer (O(n) each), so a burst was O(n²) and pinned the main
+// thread; batching makes a burst one render per frame. User actions still call
+// render() synchronously for instant feedback.
+let _renderPending = false;
+function scheduleRender() {
+  if (_renderPending) return;
+  _renderPending = true;
+  const raf = window.requestAnimationFrame || (cb => setTimeout(cb, 16));
+  raf(() => { _renderPending = false; render(true); });
 }
 
 function matchesCurrentFilters(msg) {
