@@ -1441,8 +1441,12 @@ function render(isLive) {
       let el = null;
       if (focusInfo.head) el = r.querySelector('.lhead');
       else if (focusInfo.pick != null) {
-        el = r.querySelector('[data-pick="' + focusInfo.pick + '"][data-val="'
-          + (focusInfo.val || '').replace(/"/g, '\\"') + '"]') || r.querySelector('.lhead');
+        // Match by iterating, not by building an attribute selector from the
+        // message's own field values — a raw quote/newline/bracket in a value
+        // would make querySelector throw and abort the focus restore.
+        el = Array.from(r.querySelectorAll('[data-pick]')).find(x =>
+          x.getAttribute('data-pick') === focusInfo.pick &&
+          x.getAttribute('data-val') === focusInfo.val) || r.querySelector('.lhead');
       }
       if (el) { el.focus(); return; }
     }

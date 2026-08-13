@@ -199,7 +199,12 @@ def _capture_session(m):
     is enriched from ``SessionManager``.
     """
     ctx = getattr(m, "context", None) or {}
-    if "session" not in ctx:
+    # Gate on the VALUE, not just the key. An absent key, an explicit ``null``,
+    # and an empty ``{}`` are all session-less on the wire (SESSION-1 §2.1):
+    # ``null`` would otherwise fabricate the default Session, and ``{}`` would be
+    # minted a fresh RANDOM session_id per capture, defeating coalescing,
+    # grouping and the session filter.
+    if not ctx.get("session"):
         return None, {}
     try:
         from ovos_bus_client.session import SessionManager

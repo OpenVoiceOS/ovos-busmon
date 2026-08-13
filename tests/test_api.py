@@ -492,9 +492,13 @@ def test_capture_session_no_fabrication_for_sessionless_frame():
     # misrepresent the bus and let Resend re-inject a pipeline the frame never
     # had). A frame that declared a session is still enriched from SessionManager.
     from ovos_busmon.service import _capture_session
-    sid, sdata = _capture_session(_Msg("speak", {"utterance": "hi"}, {}))
-    assert sid is None
-    assert sdata == {}
+    # absent key, explicit null, and empty dict are all session-less: no default
+    # fabrication and no randomly-minted id.
+    for ctx in ({}, {"session": None}, {"session": {}}):
+        sid, sdata = _capture_session(_Msg("speak", {"utterance": "hi"}, ctx))
+        assert sid is None, ctx
+        assert sdata == {}, ctx
+    # a frame that declared a session is still enriched from SessionManager.
     sid2, sdata2 = _capture_session(_Msg("speak", {}, {"session": {"session_id": "x"}}))
     assert sid2 == "x"
     assert sdata2
