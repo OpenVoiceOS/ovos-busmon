@@ -42,9 +42,11 @@ animation, mic level updates, and IPC traffic, is muted by default so it does
 not drown the messages you care about. The **Show noise** button reveals it,
 shows a live count, and toggles back to hide it again.
 
-Consecutive rows with the same message type coalesce into one row with a
-**×N** count next to the type, so a burst reads as a single line instead of a
-wall of duplicates.
+Consecutive rows that are true duplicates coalesce into one row with a **×N**
+count next to the type, so a burst reads as a single line instead of a wall of
+duplicates. Two rows coalesce only when the type, the session, and the data all
+match. Rows with a different session or different data stay separate, so the log
+never hides a distinct message behind a count.
 
 ### Filtering
 

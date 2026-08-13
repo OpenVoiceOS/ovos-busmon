@@ -693,6 +693,17 @@ let droppedCount = 0;
 // Memoization for classifyMessage/isNoise lives off-object so exported/copied
 // raw bus messages never carry synthetic fields (see classifyMessage/isNoise).
 const _catCache = new WeakMap();
+const _coalKeyCache = new WeakMap();
+// Two rows coalesce into one ×N line only when they are true duplicates: same
+// type AND same session AND same data. Keying on type alone would silently hide
+// distinct messages (different utterances or sessions) behind one row.
+function coalKey(m) {
+  if (m && typeof m === 'object' && _coalKeyCache.has(m)) return _coalKeyCache.get(m);
+  const k = String((m && m.type) || '') + '\x00' + String((m && m.session) || '')
+    + '\x00' + ((m && m.data !== undefined) ? JSON.stringify(m.data) : '');
+  if (m && typeof m === 'object') _coalKeyCache.set(m, k);
+  return k;
+}
 const _noiseCache = new WeakMap();
 
 // Tiny vendored JSON syntax highlighter (regex tokenizer over
@@ -776,13 +787,15 @@ function setBadge(mode, text) {
 // ─── MODE 2: SSE transport ────────────────────────────────────────────────────
 let _sseLastId = 0;
 let _sseSource = null;
+let _sseGen = 0;
 
 function startSSE() {
   wsConfigPanel.style.display = 'none';
   setBadge('sse', 'SSE (service)');
 
-  // Backfill from ring buffer
-  authFetch('api/messages?since_id=0&limit=500')
+  // Backfill from ring buffer — honor the configured client buffer size so a
+  // reload restores as much history as the user asked to keep, not a fixed cap.
+  authFetch('api/messages?since_id=0&limit=' + maxBuffer())
     .then(r => r.json())
     .then(msgs => {
       msgs.forEach(m => pushMessage(normaliseServiceMsg(m)));
@@ -795,16 +808,20 @@ function startSSE() {
 function connectSSE() {
   if (_sseSource) _sseSource.close();
   _sseSource = new EventSource(withToken('api/stream'));
-  _sseSource.onopen  = () => { transportError = null; setBadge('sse', 'SSE (service)'); setWaveLive(); render(); };
+  _sseSource.onopen  = () => { _sseGen++; transportError = null; setBadge('sse', 'SSE (service)'); setWaveLive(); render(); };
   _sseSource.onerror = () => {
     setWaveDown();
+    // Guard against a slow status probe stomping a connection that recovered
+    // while the probe was in flight: if onopen has fired since, drop the result.
+    const gen = _sseGen;
     authFetch('api/status', {signal: AbortSignal.timeout(1500)})
       .then(r => {
+        if (gen !== _sseGen) return;
         transportError = r.status === 401 ? 'auth' : 'down';
         setBadge('err', r.status === 401 ? 'Auth failed — check token' : 'SSE error — reconnecting…');
         render();
       })
-      .catch(() => { transportError = 'down'; setBadge('err', 'SSE error — reconnecting…'); render(); });
+      .catch(() => { if (gen !== _sseGen) return; transportError = 'down'; setBadge('err', 'SSE error — reconnecting…'); render(); });
   };
   _sseSource.addEventListener('message', e => {
     try {
@@ -1105,7 +1122,7 @@ function coalesce(list) {
   const out = [];
   for (const m of list) {
     const prev = out[out.length - 1];
-    if (prev && prev.msg.type === m.type) {
+    if (prev && coalKey(prev.msg) === coalKey(m)) {
       prev.count++; prev.ids.push(m.id);
       // The representative is always the newest (max id) member of the run, so
       // the row's data-mid is stable whatever the sort order — otherwise an
@@ -1715,9 +1732,9 @@ async function sendChat() {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({utterance: text, lang: lang, session_id: sid, session: session}),
     });
-    if (!resp.ok) appendChatBubble('error', 'Send failed: ' + await resp.text());
+    if (!resp.ok) resolvePendingChat(sid, 'error', 'Send failed: ' + await resp.text());
   } catch (e) {
-    appendChatBubble('error', 'Send failed: ' + e.message);
+    resolvePendingChat(sid, 'error', 'Send failed: ' + e.message);
   }
 }
 
