@@ -484,3 +484,17 @@ async def test_slow_sse_consumer_is_not_dropped():
     assert q in svc._subscribers, "slow-but-alive subscriber must stay subscribed"
     assert q.get_nowait() == {"seq": "new"}, "newest payload must be delivered"
     svc._subscribers.clear()
+
+
+def test_capture_session_no_fabrication_for_sessionless_frame():
+    # A frame that carried no context["session"] must stay session-less — the
+    # capture path must NOT fabricate the global default Session (which would
+    # misrepresent the bus and let Resend re-inject a pipeline the frame never
+    # had). A frame that declared a session is still enriched from SessionManager.
+    from ovos_busmon.service import _capture_session
+    sid, sdata = _capture_session(_Msg("speak", {"utterance": "hi"}, {}))
+    assert sid is None
+    assert sdata == {}
+    sid2, sdata2 = _capture_session(_Msg("speak", {}, {"session": {"session_id": "x"}}))
+    assert sid2 == "x"
+    assert sdata2
