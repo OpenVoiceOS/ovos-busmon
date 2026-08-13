@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1a13](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a13) (2026-08-13)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a12...0.1.1a13)
+
+**Merged pull requests:**
+
+- docs: fix busmon doc gaps \(buffer distinction, shortcuts, token symptoms\) [\#42](https://github.com/OpenVoiceOS/ovos-busmon/pull/42) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.1.1a12](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a12) (2026-08-13)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a11...0.1.1a12)
