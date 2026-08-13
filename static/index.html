@@ -297,6 +297,10 @@
     .now .now-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: 0 0 auto; }
     .now .now-label { font-weight: 700; color: var(--ink); }
     .now .now-detail { color: var(--muted); font-family: var(--mono); font-size: 0.82em; min-width: 0; }
+    /* The now-state hues match the category left-edge colors on the log rows
+     * (hearing=utterance, thinking=skill, speaking=output) on purpose, so the
+     * readout and the stream read as one system; same fixed-hue exception as
+     * the category swatches, legible on both the light and dark --card. */
     .now.live     { border-left-color: var(--ok); }  .now.live .now-dot     { background: var(--ok); }
     .now.hearing  { border-left-color: #1565c0; }     .now.hearing .now-dot  { background: #1565c0; }
     .now.thinking { border-left-color: #6a1b9a; }     .now.thinking .now-dot { background: #6a1b9a; }
@@ -501,7 +505,7 @@
     <button class="btn secondary sm" id="view-btn" onclick="toggleView()" title="Group messages by session for tracing one interaction">🗂 Group by session</button>
     <button class="btn secondary sm" id="chat-btn" onclick="toggleChat()">💬 Chat</button>
     <details class="tools">
-      <summary class="btn secondary sm">⋯ Tools</summary>
+      <summary class="btn secondary sm">⋯ Tools ▾</summary>
       <div class="tools-menu">
         <button class="btn secondary sm" onclick="exportJSONL()" title="One message per line">⬇ Export JSONL</button>
         <button class="btn secondary sm" onclick="exportJSON()" title="One JSON array">⬇ Export JSON</button>
@@ -513,11 +517,11 @@
     </details>
   </div>
   <div class="tbar filt">
-    <input type="text" id="filter"         class="input sm" placeholder="type glob — e.g. ovos.* or speak">
-    <input type="text" id="search"         class="input sm" placeholder="search content">
-    <input type="text" id="session_filter" class="input sm" placeholder="session">
-    <input type="text" id="source_filter"  class="input sm" placeholder="source">
-    <input type="text" id="dest_filter"    class="input sm" placeholder="destination">
+    <input type="text" id="filter"         class="input sm" aria-label="Filter by message type (glob)" placeholder="type glob — e.g. ovos.* or speak">
+    <input type="text" id="search"         class="input sm" aria-label="Search message content" placeholder="search content">
+    <input type="text" id="session_filter" class="input sm" aria-label="Filter by session" placeholder="session">
+    <input type="text" id="source_filter"  class="input sm" aria-label="Filter by source" placeholder="source">
+    <input type="text" id="dest_filter"    class="input sm" aria-label="Filter by destination" placeholder="destination">
     <select id="sort" class="input sm"><option value="desc">newest</option><option value="asc">oldest</option></select>
     <button class="btn secondary sm" onclick="clearFilters()">Clear</button>
   </div>
@@ -543,11 +547,11 @@
     <input type="text" id="inject-type" class="input" placeholder="Message type (e.g. speak)" style="flex:0 1 240px;">
     <label class="inline-label">Payload JSON (data):</label>
   </div>
-  <textarea id="inject-payload">{}</textarea>
+  <textarea id="inject-payload" aria-label="Inject payload JSON (data)">{}</textarea>
   <div class="row" style="margin-top:0.5rem;">
     <label class="inline-label">Context JSON (optional):</label>
   </div>
-  <textarea id="inject-context">{}</textarea>
+  <textarea id="inject-context" aria-label="Inject context JSON (optional)">{}</textarea>
   <div>
     <label class="inline-label"><input type="checkbox" id="inject-attach-session"> attach the Session below</label>
     <button class="btn danger" onclick="injectMessage()">⚡ Send message</button>
@@ -581,7 +585,7 @@
       <input type="text" id="sess-pipeline" class="input sm" placeholder="e.g. stop_high, padatious_high, fallback_low"></label>
   </div>
   <details class="more"><summary>Advanced — merge raw session JSON</summary>
-    <textarea id="sess-advanced" placeholder="{}"></textarea>
+    <textarea id="sess-advanced" aria-label="Advanced: raw session JSON merged over the fields above" placeholder="{}"></textarea>
   </details>
   <div style="margin-top:0.5rem;">
     <button class="btn secondary sm" onclick="clearSession()">Clear</button>
@@ -1369,8 +1373,20 @@ function render(isLive) {
     (paused ? ' · PAUSED' : '');
 
   if (msgs.length === 0) {
-    log.innerHTML = `<div class="empty"><h3>No messages match the filter</h3>
-      <p><button class="btn secondary" onclick="clearFilters()">Clear filters</button></p></div>`;
+    // Distinguish "muted as noise" from "filtered out": if no real filter is
+    // set and everything is hidden by the noise mute, point at Show noise —
+    // Clear filters would be a dead click.
+    const noRealFilter = quickCat === 'all' &&
+      !['filter', 'search', 'session_filter', 'source_filter', 'dest_filter']
+        .some(id => document.getElementById(id).value.trim());
+    if (noRealFilter && !showNoise && noiseCount() > 0) {
+      log.innerHTML = `<div class="empty"><h3>All ${noiseCount()} messages are muted as noise</h3>
+        <p>High-frequency plumbing is hidden by default.</p>
+        <p><button class="btn secondary" onclick="toggleNoise()">Show noise</button></p></div>`;
+    } else {
+      log.innerHTML = `<div class="empty"><h3>No messages match the filter</h3>
+        <p><button class="btn secondary" onclick="clearFilters()">Clear filters</button></p></div>`;
+    }
     return;
   }
 
