@@ -56,7 +56,16 @@ class RingBuffer:
         return self._counter
 
     def since(self, since_id: int = 0, limit: Optional[int] = None) -> List[CapturedMessage]:
-        """Return messages with id > since_id, newest-last order, up to *limit*."""
+        """Return messages with id > since_id, oldest-to-newest, capped to the
+        *newest* ``limit``.
+
+        The cap keeps the NEWEST ``limit`` messages, so this serves the UI's
+        one-shot backfill (``since_id=0`` -> the most recent screenful). It is
+        therefore NOT a gap-free incremental cursor: a caller that polls with a
+        rising ``since_id`` and more than ``limit`` new messages between polls
+        would skip the oldest of them. The live UI does not poll this way (it
+        tails via SSE), so it is unaffected.
+        """
         result = [m for m in self._buf if m.id > since_id]
         if limit is not None:
             result = result[-limit:]

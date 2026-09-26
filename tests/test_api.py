@@ -3,15 +3,14 @@ from __future__ import annotations
 
 import asyncio
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+
+# Patch ovos_bus_client before importing service so the lifespan
+# bus connect does not try to reach a real bus.
+from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-
-# Patch ovos_bus_client before importing service so the lifespan
-# bus connect does not try to reach a real bus.
-import sys, types
 
 # Stub ovos_bus_client so tests run without a real OVOS bus.
 # Always replace the client submodule because the real installed package
@@ -51,19 +50,22 @@ class _SM:
 
 # Ensure top-level module has Message
 import ovos_bus_client as _obc_top
+
 if not hasattr(_obc_top, "Message"):
     _obc_top.Message = _Msg
 
 # Unconditionally inject AsyncMessageBusClient into the client submodule
 import ovos_bus_client.client as _obc_client
+
 _obc_client.AsyncMessageBusClient = _AsyncBus
 
 # Inject SessionManager stub into session submodule
 import ovos_bus_client.session as _obc_sess
+
 if not hasattr(_obc_sess, "SessionManager"):
     _obc_sess.SessionManager = _SM
 
-from ovos_busmon.service import app, _buffer, _subscribers
+from ovos_busmon.service import _buffer, _subscribers, app
 
 
 @pytest_asyncio.fixture
@@ -89,6 +91,35 @@ async def test_status(client):
     data = r.json()
     assert "version" in data
     assert "buffered" in data
+
+
+@pytest.mark.asyncio
+async def test_status_bus_connected_flag(client):
+    """/api/status exposes bus_connected so the UI can tell 'bus down' from
+    'idle' — True for a connected capture bus, False for a disconnected one."""
+    import ovos_busmon.service as svc
+
+    class _Up:
+        connected = True
+
+    with patch.object(svc, "_capture_bus", _Up()):
+        r = await client.get("/api/status")
+    assert r.status_code == 200
+    data = r.json()
+    assert "bus_connected" in data
+    assert data["bus_connected"] is True
+    assert "last_bus_event_at" in data
+
+    class _Down:
+        connected = False
+
+    with patch.object(svc, "_capture_bus", _Down()):
+        r = await client.get("/api/status")
+    assert r.json()["bus_connected"] is False
+
+    with patch.object(svc, "_capture_bus", None):
+        r = await client.get("/api/status")
+    assert r.json()["bus_connected"] is False
 
 
 @pytest.mark.asyncio
@@ -132,7 +163,7 @@ async def test_export_jsonl(client):
 
     r = await client.get("/api/export")
     assert r.status_code == 200
-    lines = [l for l in r.text.split("\n") if l.strip()]
+    lines = [ln for ln in r.text.split("\n") if ln.strip()]
     assert len(lines) == 3
     for line in lines:
         obj = json.loads(line)
@@ -148,20 +179,117 @@ async def test_send_validation(client):
 
 @pytest.mark.asyncio
 async def test_send_ok(client):
-    """POST /api/send should return 202 — uses the stubbed AsyncMessageBusClient."""
-    r = await client.post("/api/send", json={"type": "speak", "data": {"utterance": "hello"}})
+    """POST /api/send emits through the persistent capture bus and returns 202."""
+    import ovos_busmon.service as svc
+
+    class _Bus:
+        connected = True
+
+        async def emit(self, msg):
+            pass
+
+    with patch.object(svc, "_capture_bus", _Bus()):
+        r = await client.post("/api/send", json={"type": "speak", "data": {"utterance": "hello"}})
     assert r.status_code == 202
     assert r.json()["ok"] is True
 
 
 @pytest.mark.asyncio
-async def test_chat_requires_auth():
-    """POST /api/chat must reject unauthenticated requests, same as /api/send."""
+async def test_send_503_when_bus_not_connected(client):
+    """A dead/absent capture bus must fail fast to 503 — never hang the request
+    or open a throwaway per-request client that reconnects forever."""
+    import ovos_busmon.service as svc
+
+    with patch.object(svc, "_capture_bus", None):
+        r = await client.post("/api/send", json={"type": "speak", "data": {}})
+    assert r.status_code == 503
+
+    class _Down:
+        connected = False
+
+        async def emit(self, msg):
+            raise AssertionError("must not emit on a disconnected bus")
+
+    with patch.object(svc, "_capture_bus", _Down()):
+        r = await client.post("/api/send", json={"type": "speak", "data": {}})
+    assert r.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_async_client_bus_treated_as_connected(client):
+    """A bus exposing no connection indicator (the AsyncMessageBusClient shape:
+    connect/close/on/remove/emit only) must be treated as connected so inject
+    and chat work — not permanently 503'd once PR #200 ships."""
+    import ovos_busmon.service as svc
+
+    class _AsyncShape:
+        async def connect(self):
+            pass
+
+        async def emit(self, m):
+            pass
+
+    with patch.object(svc, "_capture_bus", _AsyncShape()):
+        r = await client.post("/api/send", json={"type": "speak", "data": {}})
+    assert r.status_code == 202
+
+
+@pytest.mark.asyncio
+async def test_auth_off_by_default():
+    """With no token or username/password configured, the API is open (the
+    loopback dev default). There are NO default credentials anymore."""
+    import ovos_busmon.service as svc
+    assert not svc._auth_configured()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test",
     ) as c:
+        r = await c.get("/api/status")
+    assert r.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_token_auth_enforced_when_set(monkeypatch):
+    """When BUSMON_TOKEN is set, a mutating endpoint rejects a request with no
+    token and accepts one via ?token= or Authorization: Bearer."""
+    import ovos_busmon.service as svc
+    monkeypatch.setattr(svc, "TOKEN", "s3cret")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test",
+    ) as c:
+        # no token -> 401
         r = await c.post("/api/chat", json={"utterance": "hi", "session_id": "s1"})
-    assert r.status_code == 401
+        assert r.status_code == 401
+        # wrong token -> 401
+        r = await c.post("/api/chat?token=nope",
+                         json={"utterance": "hi", "session_id": "s1"})
+        assert r.status_code == 401
+        # correct token via query param
+        r = await c.get("/api/status?token=s3cret")
+        assert r.status_code == 200
+        # correct token via Authorization: Bearer
+        r = await c.get("/api/status", headers={"Authorization": "Bearer s3cret"})
+        assert r.status_code == 200
+
+
+def test_require_auth_or_exit():
+    """A non-loopback bind without any auth must refuse to start; loopback, or a
+    non-loopback bind WITH auth, must be allowed."""
+    import pytest as _pt
+
+    import ovos_busmon.service as svc
+    # non-loopback + no auth -> SystemExit(2)
+    svc.TOKEN = svc.USERNAME = svc.PASSWORD = ""
+    with _pt.raises(SystemExit) as ei:
+        svc._require_auth_or_exit("0.0.0.0")
+    assert ei.value.code == 2
+    # loopback + no auth -> allowed
+    svc._require_auth_or_exit("127.0.0.1")
+    # non-loopback + token -> allowed
+    svc.TOKEN = "s3cret"
+    try:
+        svc._require_auth_or_exit("0.0.0.0")
+    finally:
+        svc.TOKEN = ""
 
 
 @pytest.mark.asyncio
@@ -189,6 +317,8 @@ async def test_chat_payload_shape(client):
     captured = {}
 
     class _RecordingBus:
+        connected = True
+
         def __init__(self, **kw):
             pass
 
@@ -203,7 +333,7 @@ async def test_chat_payload_shape(client):
             captured["data"] = msg.data
             captured["context"] = msg.context
 
-    with patch.object(svc, "_make_bus", lambda h, p: _RecordingBus()):
+    with patch.object(svc, "_capture_bus", _RecordingBus()):
         r = await client.post(
             "/api/chat",
             json={"utterance": "what time is it", "lang": "en-us", "session_id": "chat-abc123"},
@@ -222,13 +352,96 @@ async def test_chat_payload_shape(client):
 
 
 @pytest.mark.asyncio
+async def test_chat_honors_client_declared_session(client):
+    """When the client sends an explicit `session` dict (the busmon Session
+    editor), it is honored verbatim in context["session"] — including
+    site_id/pipeline — and the utterance lang follows the session's lang."""
+    from ovos_busmon import service as svc
+
+    captured = {}
+
+    class _RecordingBus:
+        connected = True
+
+        def __init__(self, **kw):
+            pass
+
+        async def connect(self):
+            pass
+
+        async def close(self):
+            pass
+
+        async def emit(self, msg):
+            captured["data"] = msg.data
+            captured["context"] = msg.context
+
+    session = {
+        "session_id": "sess-kitchen", "lang": "pt-PT",
+        "site_id": "kitchen", "pipeline": ["stop_high", "padatious_high"],
+    }
+    with patch.object(svc, "_capture_bus", _RecordingBus()):
+        r = await client.post(
+            "/api/chat",
+            json={
+                "utterance": "que horas são", "lang": "en-us",
+                "session_id": "sess-kitchen", "session": session,
+            },
+        )
+
+    assert r.status_code == 202
+    sess = captured["context"]["session"]
+    assert sess["site_id"] == "kitchen"
+    assert sess["pipeline"] == ["stop_high", "padatious_high"]
+    assert sess["session_id"] == "sess-kitchen"
+    assert sess["lang"] == "pt-PT"
+    # The utterance lang follows the declared session, not the top-level default.
+    assert captured["data"]["lang"] == "pt-PT"
+
+
+@pytest.mark.asyncio
+async def test_chat_empty_session_uses_default_build(client):
+    """An explicit empty session {} is treated as 'not declared': the server
+    builds its default Session with the pipeline suppressed (SESSION-1), not the
+    verbatim-honor path."""
+    from ovos_busmon import service as svc
+
+    captured = {}
+
+    class _RecordingBus:
+        connected = True
+
+        def __init__(self, **kw):
+            pass
+
+        async def connect(self):
+            pass
+
+        async def close(self):
+            pass
+
+        async def emit(self, msg):
+            captured["context"] = msg.context
+
+    with patch.object(svc, "_capture_bus", _RecordingBus()):
+        r = await client.post(
+            "/api/chat",
+            json={"utterance": "hi", "session_id": "s1", "session": {}},
+        )
+    assert r.status_code == 202
+    sess = captured["context"]["session"]
+    assert sess["session_id"] == "s1"
+    assert sess.get("pipeline", []) == []
+
+
+@pytest.mark.asyncio
 async def test_chat_speak_reply_reaches_stream_for_matching_session():
     """A mocked ``speak`` reply carrying the same session_id used by
     /api/chat must reach the SSE stream (what the chat panel filters on
     client-side to render an assistant bubble).
     """
-    from ovos_busmon.service import _broadcast_to_sse, _subscribers
     from ovos_busmon.buffer import CapturedMessage
+    from ovos_busmon.service import _broadcast_to_sse, _subscribers
 
     session_id = "chat-abc123"
     q: asyncio.Queue = asyncio.Queue(maxsize=10)
@@ -285,3 +498,36 @@ async def test_sse_stream_broadcasts():
         assert received["type"] == "speak"
     finally:
         _subscribers.discard(q)
+
+
+@pytest.mark.asyncio
+async def test_slow_sse_consumer_is_not_dropped():
+    """A subscriber whose queue is full keeps its subscription and receives the
+    newest payload (oldest queued item is dropped instead of the subscriber)."""
+    import ovos_busmon.service as svc
+    svc._subscribers.clear()
+    q = asyncio.Queue(maxsize=1)
+    q.put_nowait({"seq": "old"})  # queue now full
+    svc._subscribers.add(q)
+    await svc._broadcast_to_sse({"seq": "new"})
+    assert q in svc._subscribers, "slow-but-alive subscriber must stay subscribed"
+    assert q.get_nowait() == {"seq": "new"}, "newest payload must be delivered"
+    svc._subscribers.clear()
+
+
+def test_capture_session_no_fabrication_for_sessionless_frame():
+    # A frame that carried no context["session"] must stay session-less — the
+    # capture path must NOT fabricate the global default Session (which would
+    # misrepresent the bus and let Resend re-inject a pipeline the frame never
+    # had). A frame that declared a session is still enriched from SessionManager.
+    from ovos_busmon.service import _capture_session
+    # absent key, explicit null, and empty dict are all session-less: no default
+    # fabrication and no randomly-minted id.
+    for ctx in ({}, {"session": None}, {"session": {}}):
+        sid, sdata = _capture_session(_Msg("speak", {"utterance": "hi"}, ctx))
+        assert sid is None, ctx
+        assert sdata == {}, ctx
+    # a frame that declared a session is still enriched from SessionManager.
+    sid2, sdata2 = _capture_session(_Msg("speak", {}, {"session": {"session_id": "x"}}))
+    assert sid2 == "x"
+    assert sdata2

@@ -1,6 +1,6 @@
 """Unit tests for RingBuffer."""
 import json
-import pytest
+
 from ovos_busmon.buffer import CapturedMessage, RingBuffer
 
 
@@ -66,7 +66,7 @@ def test_export_jsonl_shape():
     for i in range(1, 4):
         buf.append(_msg(i, f"type.{i}"))
     jsonl = buf.export_jsonl()
-    lines = [l for l in jsonl.split("\n") if l.strip()]
+    lines = [ln for ln in jsonl.split("\n") if ln.strip()]
     assert len(lines) == 3
     for line in lines:
         obj = json.loads(line)
