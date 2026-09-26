@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1a24](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a24) (2026-09-26)
+
+[Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a23...0.1.1a24)
+
+**Merged pull requests:**
+
+- Update python Docker tag to v3.14 [\#7](https://github.com/OpenVoiceOS/ovos-busmon/pull/7) ([renovate[bot]](https://github.com/apps/renovate))
+
 ## [0.1.1a23](https://github.com/OpenVoiceOS/ovos-busmon/tree/0.1.1a23) (2026-08-13)
 
 [Full Changelog](https://github.com/OpenVoiceOS/ovos-busmon/compare/0.1.1a22...0.1.1a23)
