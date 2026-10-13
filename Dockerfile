@@ -1,5 +1,5 @@
 # ── Stage 1: build wheel ──────────────────────────────────────────────────────
-FROM python:3.14-slim AS builder
+FROM python:3.15-slim AS builder
 
 WORKDIR /build
 
@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir build && \
 
 
 # ── Stage 2: runtime ──────────────────────────────────────────────────────────
-FROM python:3.14-slim
+FROM python:3.15-slim
 
 WORKDIR /app
 
